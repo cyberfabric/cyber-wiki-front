@@ -1,0 +1,19 @@
+{
+  "title": "Home",
+  "subtitle": "How to create screens with FrontX framework",
+  "overview_title": "FrontX Screen Creation",
+  "overview_description": "FrontX uses a screenset-based architecture. Each screenset is a self-contained module with its own screens, state, events, effects, and translations. Screens are lazy-loaded components registered in a screenset config.",
+  "steps_title": "Steps to Create a Screen",
+  "step1": "1. Add a screen ID constant to the screenset ids.ts file",
+  "step2": "2. Create screen folder: screens/{name}/ with i18n/ and components/",
+  "step3": "3. Create the Screen component using useScreenTranslations and TextLoader",
+  "step4": "4. Add i18n JSON files for all supported languages with I18nRegistry.createLoader",
+  "step5": "5. Register the screen in the screenset config menu with lazy import",
+  "structure_title": "Screen File Structure",
+  "structure_tree": "src/screensets/{name}/\n  ids.ts                    — screen ID constants\n  {name}Screenset.tsx        — screenset config & registration\n  i18n/                      — screenset-level translations\n  screens/\n    {screen}/\n      {Screen}Screen.tsx     — screen component (default export)\n      i18n/                  — screen-level translations\n      components/            — screen-local components",
+  "rules_title": "Key Rules",
+  "rule1": "Use @hai3/uikit components; local uikit only if missing from the kit.",
+  "rule2": "Data flow follows event-driven architecture — actions emit events, effects update slices.",
+  "rule3": "No direct slice imports in screens; use @hai3/react hooks or local actions.",
+  "rule4": "All text must use t() with proper i18n namespaces: screen.{screenset}.{screen}:key."
+}

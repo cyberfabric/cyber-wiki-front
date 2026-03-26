@@ -1,0 +1,18 @@
+{
+  "title": "デモスクリーンセット",
+  "description": "HAI3フレームワークのサンプル画面",
+  "screens": {
+    "home": {
+      "title": "ハローワールド"
+    },
+    "profile": {
+      "title": "ユーザープロファイル"
+    },
+    "theme": {
+      "title": "現在のテーマ"
+    },
+    "uikit": {
+      "title": "UIキット要素"
+    }
+  }
+}

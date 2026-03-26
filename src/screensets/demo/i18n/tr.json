@@ -1,0 +1,18 @@
+{
+  "title": "Demo Ekran Seti",
+  "description": "HAI3 çerçevesi için örnek ekranlar",
+  "screens": {
+    "home": {
+      "title": "Merhaba Dünya"
+    },
+    "profile": {
+      "title": "Kullanıcı Profili"
+    },
+    "theme": {
+      "title": "Mevcut Tema"
+    },
+    "uikit": {
+      "title": "UI Kit Öğeleri"
+    }
+  }
+}

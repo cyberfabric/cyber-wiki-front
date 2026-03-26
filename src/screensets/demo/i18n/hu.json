@@ -1,0 +1,18 @@
+{
+  "title": "Demó képernyőkészlet",
+  "description": "Példaképernyők a HAI3 keretrendszerhez",
+  "screens": {
+    "home": {
+      "title": "Helló világ"
+    },
+    "profile": {
+      "title": "Felhasználói profil"
+    },
+    "theme": {
+      "title": "Jelenlegi téma"
+    },
+    "uikit": {
+      "title": "UI Kit elemek"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Set de ecrane demo",
+  "description": "Ecrane exemplu pentru cadrul HAI3",
+  "screens": {
+    "home": {
+      "title": "Bună lume"
+    },
+    "profile": {
+      "title": "Profil utilizator"
+    },
+    "theme": {
+      "title": "Temă curentă"
+    },
+    "uikit": {
+      "title": "Elemente UI Kit"
+    }
+  }
+}

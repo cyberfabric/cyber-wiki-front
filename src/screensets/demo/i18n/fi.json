@@ -1,0 +1,18 @@
+{
+  "title": "Demon näyttöjoukko",
+  "description": "Esimerkkinäytöt HAI3-kehykselle",
+  "screens": {
+    "home": {
+      "title": "Hei maailma"
+    },
+    "profile": {
+      "title": "Käyttäjäprofiili"
+    },
+    "theme": {
+      "title": "Nykyinen teema"
+    },
+    "uikit": {
+      "title": "UI-kitin elementit"
+    }
+  }
+}
