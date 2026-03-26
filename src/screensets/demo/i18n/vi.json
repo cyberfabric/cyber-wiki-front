@@ -1,0 +1,18 @@
+{
+  "title": "Bộ màn hình Demo",
+  "description": "Các màn hình mẫu cho framework HAI3",
+  "screens": {
+    "home": {
+      "title": "Xin chào thế giới"
+    },
+    "profile": {
+      "title": "Hồ sơ người dùng"
+    },
+    "theme": {
+      "title": "Chủ đề hiện tại"
+    },
+    "uikit": {
+      "title": "Các phần tử UI Kit"
+    }
+  }
+}

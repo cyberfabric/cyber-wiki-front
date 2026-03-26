@@ -1,0 +1,18 @@
+{
+  "title": "Demo Schermset",
+  "description": "Voorbeeldschermen voor het HAI3-framework",
+  "screens": {
+    "home": {
+      "title": "Hallo Wereld"
+    },
+    "profile": {
+      "title": "Gebruikersprofiel"
+    },
+    "theme": {
+      "title": "Huidig Thema"
+    },
+    "uikit": {
+      "title": "UI-Kit Elementen"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Ensemble d'Écrans Demo",
+  "description": "Écrans d'exemple pour le framework HAI3",
+  "screens": {
+    "home": {
+      "title": "Bonjour le Monde"
+    },
+    "profile": {
+      "title": "Profil Utilisateur"
+    },
+    "theme": {
+      "title": "Thème Actuel"
+    },
+    "uikit": {
+      "title": "Éléments du Kit UI"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "title": "示範螢幕集",
+  "description": "HAI3框架範例螢幕",
+  "screens": {
+    "home": {
+      "title": "你好世界"
+    },
+    "profile": {
+      "title": "使用者設定檔"
+    },
+    "theme": {
+      "title": "當前主題"
+    },
+    "uikit": {
+      "title": "UI組件元素"
+    }
+  }
+}

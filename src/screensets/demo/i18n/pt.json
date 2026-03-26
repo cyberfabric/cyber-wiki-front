@@ -1,0 +1,18 @@
+{
+  "title": "Conjunto de Telas Demo",
+  "description": "Telas de exemplo para o framework HAI3",
+  "screens": {
+    "home": {
+      "title": "Olá Mundo"
+    },
+    "profile": {
+      "title": "Perfil do Usuário"
+    },
+    "theme": {
+      "title": "Tema Atual"
+    },
+    "uikit": {
+      "title": "Elementos do Kit de UI"
+    }
+  }
+}

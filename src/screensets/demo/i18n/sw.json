@@ -1,0 +1,18 @@
+{
+  "title": "Seti ya Skrini ya Onyesho",
+  "description": "Skrini za mfano wa mfumo wa HAI3",
+  "screens": {
+    "home": {
+      "title": "Habari Dunia"
+    },
+    "profile": {
+      "title": "Wasifu wa Mtumiaji"
+    },
+    "theme": {
+      "title": "Mandhari ya Sasa"
+    },
+    "uikit": {
+      "title": "Vipengele vya UI Kit"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Demo Screenset",
+  "description": "Example screens for HAI3 framework",
+  "screens": {
+    "home": {
+      "title": "Home"
+    },
+    "profile": {
+      "title": "User Profile"
+    },
+    "theme": {
+      "title": "Current Theme"
+    },
+    "uikit": {
+      "title": "UI Kit Elements"
+    }
+  }
+}
