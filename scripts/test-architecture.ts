@@ -73,12 +73,20 @@ interface ArchCheck {
  * These run in all HAI3 projects (standalone and monorepo)
  */
 function getStandaloneChecks(): ArchCheck[] {
-  return [
+  const checks: ArchCheck[] = [
     { command: 'npm run generate:colors', description: 'Generate theme colors' },
     { command: 'npm run lint -- --max-warnings 0', description: 'ESLint rules' },
     { command: 'npm run type-check', description: 'TypeScript type check' },
-    { command: 'npm run arch:deps', description: 'Dependency rules' },
   ];
+
+  const nodeVersion = parseInt(process.versions.node.split('.')[0], 10);
+  if (nodeVersion >= 21) {
+    checks.push({ command: 'npm run arch:deps', description: 'Dependency rules' });
+  } else {
+    log(`⚠️  Dependency rules - SKIPPED (requires Node >= 21, current: ${process.versions.node})`, 'yellow');
+  }
+
+  return checks;
 }
 
 /**
