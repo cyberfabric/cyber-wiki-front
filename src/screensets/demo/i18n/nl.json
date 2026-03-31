@@ -2,7 +2,7 @@
   "title": "Demo Schermset",
   "description": "Voorbeeldschermen voor het HAI3-framework",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Hallo Wereld"
     },
     "profile": {

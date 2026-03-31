@@ -2,7 +2,7 @@
   "title": "Demo-skærmsæt",
   "description": "Eksempelskærme til HAI3-frameworket",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Hej verden"
     },
     "profile": {

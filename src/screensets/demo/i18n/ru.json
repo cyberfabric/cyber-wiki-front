@@ -2,7 +2,7 @@
   "title": "Демонстрационный набор экранов",
   "description": "Примеры экранов для фреймворка HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Привет, мир"
     },
     "profile": {

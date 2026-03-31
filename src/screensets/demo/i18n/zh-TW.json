@@ -2,7 +2,7 @@
   "title": "示範螢幕集",
   "description": "HAI3框架範例螢幕",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "你好世界"
     },
     "profile": {

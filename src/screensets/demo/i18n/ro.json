@@ -2,7 +2,7 @@
   "title": "Set de ecrane demo",
   "description": "Ecrane exemplu pentru cadrul HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Bună lume"
     },
     "profile": {

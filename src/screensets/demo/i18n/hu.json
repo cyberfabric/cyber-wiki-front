@@ -2,7 +2,7 @@
   "title": "Demó képernyőkészlet",
   "description": "Példaképernyők a HAI3 keretrendszerhez",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Helló világ"
     },
     "profile": {

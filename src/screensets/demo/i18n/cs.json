@@ -2,7 +2,7 @@
   "title": "Demo sada obrazovek",
   "description": "Příklady obrazovek pro framework HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Ahoj světe"
     },
     "profile": {

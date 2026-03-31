@@ -2,7 +2,7 @@
   "title": "डेमो स्क्रीन सेट",
   "description": "HAI3 फ्रेमवर्क के लिए उदाहरण स्क्रीन",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "नमस्ते दुनिया"
     },
     "profile": {

@@ -2,7 +2,7 @@
   "title": "סט מסכים להדגמה",
   "description": "מסכים לדוגמה עבור תשתית HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "שלום עולם"
     },
     "profile": {

@@ -2,7 +2,7 @@
   "title": "ڈیمو اسکرین سیٹ",
   "description": "HAI3 فریم ورک کے لیے مثال کی اسکرینیں",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "ہیلو ورلڈ"
     },
     "profile": {

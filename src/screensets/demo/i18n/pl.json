@@ -2,7 +2,7 @@
   "title": "Zestaw ekranów demo",
   "description": "Przykładowe ekrany dla frameworka HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Witaj świecie"
     },
     "profile": {

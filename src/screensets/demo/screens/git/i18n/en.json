@@ -1,0 +1,24 @@
+{
+  "title": "Git Repository",
+  "description": "Browse, edit, and comment on repository files.",
+  "file_explorer": {
+    "title": "Files"
+  },
+  "file_header": {
+    "branch": "Branch",
+    "read": "Read",
+    "edit": "Edit",
+    "save": "Save"
+  },
+  "repo": {
+    "private": "Private"
+  },
+  "comments": {
+    "title": "Comments",
+    "new_comment_line": "New comment on line {{line}}",
+    "placeholder": "Write a comment...",
+    "add": "Add",
+    "cancel": "Cancel",
+    "resolved_count": "{{count}} resolved"
+  }
+}

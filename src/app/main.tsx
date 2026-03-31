@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HAI3Provider, apiRegistry, createHAI3App, type ThemeApplyFn } from '@hai3/react';
+import { HAI3Provider, apiRegistry, createHAI3App, type ThemeApplyFn, toggleMockMode } from '@hai3/react';
 import { Toaster, applyTheme } from '@hai3/uikit';
 import { AccountsApiService } from '@/app/api';
 import '@hai3/uikit/styles'; // UI Kit styles
@@ -27,6 +27,9 @@ apiRegistry.initialize({});
 const app = createHAI3App({
   themes: { applyFn: applyTheme as ThemeApplyFn },
 });
+
+// Enable mock mode (no real backend available)
+toggleMockMode(true);
 
 // Register app-level effects (pass store dispatch)
 registerBootstrapEffects(app.store.dispatch);

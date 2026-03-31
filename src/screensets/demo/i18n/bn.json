@@ -2,7 +2,7 @@
   "title": "ডেমো স্ক্রীন সেট",
   "description": "HAI3 ফ্রেমওয়ার্কের জন্য উদাহরণ স্ক্রীন",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "হ্যালো ওয়ার্ল্ড"
     },
     "profile": {

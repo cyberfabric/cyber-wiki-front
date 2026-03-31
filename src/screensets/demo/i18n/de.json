@@ -2,7 +2,7 @@
   "title": "Demo-Bildschirmsatz",
   "description": "Beispielbildschirme für das HAI3-Framework",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Hallo Welt"
     },
     "profile": {

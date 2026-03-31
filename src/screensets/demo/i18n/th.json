@@ -2,7 +2,7 @@
   "title": "ชุดหน้าจอสาธิต",
   "description": "หน้าจอตัวอย่างสำหรับเฟรมเวิร์ก HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "สวัสดีชาวโลก"
     },
     "profile": {

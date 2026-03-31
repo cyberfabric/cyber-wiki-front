@@ -2,7 +2,7 @@
   "title": "Set Layar Demo",
   "description": "Layar contoh untuk kerangka kerja HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Halo Dunia"
     },
     "profile": {
