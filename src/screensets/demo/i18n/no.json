@@ -2,7 +2,7 @@
   "title": "Demo-skjermsett",
   "description": "Eksempelskjermer for HAI3-rammeverket",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Hei verden"
     },
     "profile": {

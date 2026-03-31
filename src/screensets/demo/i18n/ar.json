@@ -2,7 +2,7 @@
   "title": "مجموعة العرض التوضيحي",
   "description": "شاشات مثال لإطار HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "مرحبا بالعالم"
     },
     "profile": {

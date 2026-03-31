@@ -2,7 +2,7 @@
   "title": "Bộ màn hình Demo",
   "description": "Các màn hình mẫu cho framework HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Xin chào thế giới"
     },
     "profile": {

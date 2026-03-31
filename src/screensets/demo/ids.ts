@@ -17,6 +17,7 @@ export const DEMO_SCREENSET_ID = 'demo';
  * Used for: Screen routing, screen-level translations
  */
 export const HOME_SCREEN_ID = 'home';
-
+export const CURRENT_THEME_SCREEN_ID = 'theme';
 export const PROFILE_SCREEN_ID = 'profile';
 export const UI_KIT_ELEMENTS_SCREEN_ID = 'uikit';
+export const GIT_SCREEN_ID = 'git';

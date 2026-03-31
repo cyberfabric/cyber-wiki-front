@@ -13,6 +13,9 @@
     },
     "uikit": {
       "title": "UI Kit Elements"
+    },
+    "git": {
+      "title": "Git Repository"
     }
   }
 }

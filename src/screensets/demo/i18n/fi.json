@@ -2,7 +2,7 @@
   "title": "Demon näyttöjoukko",
   "description": "Esimerkkinäytöt HAI3-kehykselle",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Hei maailma"
     },
     "profile": {

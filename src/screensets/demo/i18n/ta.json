@@ -2,7 +2,7 @@
   "title": "டெமோ திரை தொகுப்பு",
   "description": "HAI3 கட்டமைப்பிற்கான எடுத்துக்காட்டு திரைகள்",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "வணக்கம் உலகம்"
     },
     "profile": {

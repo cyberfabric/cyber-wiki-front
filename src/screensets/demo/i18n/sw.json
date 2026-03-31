@@ -2,7 +2,7 @@
   "title": "Seti ya Skrini ya Onyesho",
   "description": "Skrini za mfano wa mfumo wa HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Habari Dunia"
     },
     "profile": {

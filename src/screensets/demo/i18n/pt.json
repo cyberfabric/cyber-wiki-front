@@ -2,7 +2,7 @@
   "title": "Conjunto de Telas Demo",
   "description": "Telas de exemplo para o framework HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Olá Mundo"
     },
     "profile": {

@@ -2,7 +2,7 @@
   "title": "데모 화면 세트",
   "description": "HAI3 프레임워크 예제 화면",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "헬로 월드"
     },
     "profile": {

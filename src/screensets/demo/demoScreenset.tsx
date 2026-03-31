@@ -1,8 +1,38 @@
 import { type ScreensetConfig, ScreensetCategory, I18nRegistry, Language, screensetRegistry, i18nRegistry } from '@hai3/react';
-import { DEMO_SCREENSET_ID, HOME_SCREEN_ID, PROFILE_SCREEN_ID, UI_KIT_ELEMENTS_SCREEN_ID } from './ids';
+import { DEMO_SCREENSET_ID, HOME_SCREEN_ID, CURRENT_THEME_SCREEN_ID, PROFILE_SCREEN_ID, UI_KIT_ELEMENTS_SCREEN_ID, GIT_SCREEN_ID } from './ids';
+import { registerSlice } from '@hai3/react';
+import repoSlice from './slices/repoSlice';
+import fileSlice from './slices/fileSlice';
+import commentSlice from './slices/commentSlice';
+import { initializeRepoEffects } from './effects/repoEffects';
+import { initializeFileEffects } from './effects/fileEffects';
+import { initializeCommentEffects } from './effects/commentEffects';
+
+// Import domain events for module augmentation side effects
+import './events/repoEvents';
+import './events/fileEvents';
+import './events/commentEvents';
+
+// Import for side effect - register git API service
+import './api/gitApiService';
 
 // Import module augmentation for accounts service extra fields
 import './api/accounts/extra';
+
+/**
+ * Register git domain slices with effects
+ */
+registerSlice(repoSlice, (dispatch) => {
+  initializeRepoEffects(dispatch);
+});
+
+registerSlice(fileSlice, (dispatch) => {
+  initializeFileEffects(dispatch);
+});
+
+registerSlice(commentSlice, (dispatch) => {
+  initializeCommentEffects(dispatch);
+});
 
 /**
  * Screenset-level translations
@@ -75,6 +105,14 @@ export const demoScreenset: ScreensetConfig = {
     },
     {
       menuItem: {
+        id: CURRENT_THEME_SCREEN_ID,
+        label: `screenset.${DEMO_SCREENSET_ID}:screens.${CURRENT_THEME_SCREEN_ID}.title`,
+        icon: 'lucide:palette',
+      },
+      screen: () => import('./screens/theme/CurrentThemeScreen'),
+    },
+    {
+      menuItem: {
         id: PROFILE_SCREEN_ID,
         label: `screenset.${DEMO_SCREENSET_ID}:screens.${PROFILE_SCREEN_ID}.title`,
         icon: 'lucide:user',
@@ -88,6 +126,14 @@ export const demoScreenset: ScreensetConfig = {
         icon: 'lucide:component',
       },
       screen: () => import('./screens/uikit/UIKitElementsScreen'),
+    },
+    {
+      menuItem: {
+        id: GIT_SCREEN_ID,
+        label: `screenset.${DEMO_SCREENSET_ID}:screens.${GIT_SCREEN_ID}.title`,
+        icon: 'lucide:git-branch',
+      },
+      screen: () => import('./screens/git/GitScreen'),
     },
   ],
 };

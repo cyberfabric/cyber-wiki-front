@@ -2,7 +2,7 @@
   "title": "Set ng Screen na Demo",
   "description": "Halimbawang screen para sa HAI3 framework",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "Kamusta Mundo"
     },
     "profile": {

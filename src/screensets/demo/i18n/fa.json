@@ -2,7 +2,7 @@
   "title": "مجموعه صفحات نمایشی",
   "description": "صفحات نمونه برای چارچوب HAI3",
   "screens": {
-    "home": {
+    "helloworld": {
       "title": "سلام دنیا"
     },
     "profile": {
