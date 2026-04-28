@@ -12,7 +12,7 @@
 import { useEffect, useState } from 'react';
 import { eventBus } from '@cyberfabric/react';
 import { BookOpen, Code } from 'lucide-react';
-import { FileTree } from '@/app/components/FileTree';
+import { FileTree } from '@/app/components/file/FileTree';
 import { loadFileTree } from '@/app/actions/wikiActions';
 import { ViewMode, type TreeNode } from '@/app/api';
 

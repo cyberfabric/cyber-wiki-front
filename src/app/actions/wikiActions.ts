@@ -47,3 +47,7 @@ export function openFile(space: Space, filePath: string): void {
 export function navigateTo(hash: string): void {
   eventBus.emit('wiki/navigate', { hash });
 }
+
+export function loadPullRequests(opts: { author?: string; reviewer?: string } = {}): void {
+  eventBus.emit('wiki/my-reviews/load', opts);
+}

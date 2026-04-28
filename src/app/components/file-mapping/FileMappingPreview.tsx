@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { BookOpen, Code } from 'lucide-react';
-import { FileTree } from '@/app/components/FileTree';
+import { FileTree } from '@/app/components/file/FileTree';
 import { ViewMode, type TreeNode } from '@/app/api';
 
 interface FileMappingPreviewProps {

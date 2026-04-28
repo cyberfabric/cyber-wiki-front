@@ -17,6 +17,7 @@ export enum Urls {
   Configuration = 'configuration',
   Comments = 'comments',
   Changes = 'changes',
+  PRs = 'prs',
 }
 
 // =============================================================================
@@ -115,6 +116,8 @@ export enum FileViewMode {
   Preview = 'preview',
   Source = 'source',
   Visual = 'visual',
+  /** Unified-diff render of the on-disk content against the unsaved draft. */
+  Diff = 'diff',
 }
 
 // =============================================================================
@@ -430,6 +433,14 @@ export type LocalChangeEnrichment = {
   updated_at: string;
 };
 
+export type PRReviewer = {
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  role: string;
+  status: string;
+};
+
 export type PREnrichment = {
   type: EnrichmentType.PRDiff;
   pr_number: number;
@@ -438,7 +449,28 @@ export type PREnrichment = {
   pr_state: string;
   pr_url: string;
   created_at: string;
+  reviewers?: PRReviewer[];
   diff_hunks?: DiffHunk[];
+};
+
+export type MyReviewPR = {
+  space_slug: string;
+  space_name: string;
+  number: number;
+  title: string;
+  state: string;
+  author: string;
+  url: string;
+  created_at: string;
+  updated_at: string;
+  merged: boolean;
+  from_branch?: string;
+  reviewers: PRReviewer[];
+};
+
+export type MyReviewsResponse = {
+  pull_requests: MyReviewPR[];
+  current_git_usernames?: string[];
 };
 
 export enum EditChangeType {

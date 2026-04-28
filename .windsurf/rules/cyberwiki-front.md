@@ -27,31 +27,39 @@ src/app/
 ├── actions/         # Flux actions (emit events)
 ├── effects/         # Flux effects (listen to events, dispatch to slices)
 ├── events/          # Event type declarations (EventPayloadMap augmentation)
-├── components/      # Shared UI components (ui/ subdirectory)
+├── components/      # Shared UI components, grouped by domain (see below)
 ├── layout/          # App shell (Header, Sidebar, Layout)
 ├── themes/          # Theme definitions
 ├── icons/           # Icon components
 └── lib/             # Utility functions
 ```
 
-### Enrichments UI → `src/app/components/enrichments/`
+### Components → `src/app/components/` (domain-grouped)
 
-All enrichment UI (panels, tabs, comment threads) lives in the host app:
+Components are organized by **domain**, not by abstraction layer. Generic primitives live in `primitives/`; everything else groups by what it does (space, file, changes, etc.).
 
 ```
-src/app/components/enrichments/
-├── EnrichmentPanel.tsx   # Tabbed panel (Comments, Diffs, PRs, Local, Changes)
-├── Comment.tsx           # Recursive comment component with replies
-└── ConflictDetailsDialog.tsx
+src/app/components/
+├── primitives/      # shadcn/Radix-style primitives — Avatar, ConfirmDialog, ContextMenu, DropdownMenu, Sidebar, Skeleton, Sonner, CodeBlock
+├── space/           # Space CRUD + tree — CreateSpaceModal, EditSpaceModal, SpaceTree
+├── file/            # File viewer ecosystem — FileViewer, FileTree, FileRenderer, MdRenderer, PlainTextContentRenderer, FileViewerHeader, ViewModeSwitcher, CreateFileModal
+├── file-mapping/    # File-mapping config — FileMappingConfiguration, FileMappingConfigPanel, FileMappingPreview
+├── changes/         # Drafts + PR — DraftDiffView, PRBanner
+├── enrichments/     # Enrichment UI — EnrichmentPanel, Comment, CommentsTab, ChangesTab, ConflictDetailsDialog, ConflictResolutionWidget, DiffViewer
+├── loading/         # Loading states — SmartLoadingIndicator, TextLoader, ViewLoadingFallback
+├── ApiTokensSection.tsx
+└── ThemeProvider.tsx
 ```
 
-- Enrichment **types**, **API service** (`EnrichmentsApiService`), **events**, **actions**, and **effects** also live in `src/app/`.
+- New components **must** be placed in the matching domain folder; only truly cross-cutting providers (theme, root-level sections) sit at the components root.
+- When creating a new domain (≥3 related components), add a new subfolder rather than letting the root grow.
+- Enrichment **types**, **API service** (`EnrichmentsApiService`), **events**, **actions**, and **effects** live in `src/app/` (under `api/`, `events/`, `actions/`, `effects/`).
 - No MFE packages — `src/mfe_packages/` does not exist.
 
 ## UI KIT DISCOVERY (REQUIRED)
 
 - Read `frontx.config.json` at project root to find `uikit` value.
-- If `uikit` is `"shadcn"`: use local `components/ui/` (shadcn components already scaffolded).
+- If `uikit` is `"shadcn"`: use local `components/primitives/` (shadcn components already scaffolded).
 - If `uikit` is `"none"`: no UI library; create all components locally.
 - Before creating ANY new UI component, verify the configured UI kit does not already provide it.
 
@@ -83,14 +91,14 @@ All state flow follows: **Action → Event → Effect → Slice**
   - `query<TData>(path)` — GET requests
   - `mutation<TData, TVariables>(method, path)` — POST/PUT/PATCH/DELETE
 - Base URL pattern: `/api/{domain}/v1`
-- All requests go through Vite proxy to backend at `http://localhost:8000`
+- All requests go through Vite proxy to backend at `http://localhost:8888`
 - `withCredentials: true` for session-cookie auth
 - Access only via `apiRegistry.getService(ServiceClass)` — no direct axios/fetch
 - **No mocks in production code** — all data from real backend
 
 ### Styling Rules
 
-- Use Tailwind classes and theme tokens — no inline `style={{}}` outside `components/ui/`
+- Use Tailwind classes and theme tokens — no inline `style={{}}` outside `components/primitives/`
 - No hardcoded hex colors — use CSS variables (`hsl(var(--primary))`) or Tailwind classes
 - Units: rem-based tokens; `px` allowed only for border width
 - Dark mode: CSS variables via `[data-theme]`
@@ -101,7 +109,7 @@ All state flow follows: **Action → Event → Effect → Slice**
 - Same package: relative paths
 - Cross-branch in app: `@/` alias (maps to `src/`)
 - Cross-package: `@cyberfabric/react`, `@cyberfabric/framework`
-- UI components: local `components/ui/`
+- UI components: local `components/primitives/`
 - No barrel exports unless aggregating 3+ exports
 - Redux slices: import directly (no barrels)
 
@@ -135,7 +143,7 @@ All state flow follows: **Action → Event → Effect → Slice**
 - No native helpers where lodash equivalents exist
 - No barrel exports that hide real imports
 - No direct axios/fetch outside BaseApiService
-- No hardcoded hex colors or inline styles outside `components/ui/`
+- No hardcoded hex colors or inline styles outside `components/primitives/`
 
 ## PRE-DIFF CHECKLIST
 
@@ -145,7 +153,7 @@ All state flow follows: **Action → Event → Effect → Slice**
 - [ ] Actions return void, no async keyword
 - [ ] Effects do not call actions
 - [ ] API types defined in `src/app/api/wikiTypes.ts`
-- [ ] All sizes use rem tokens; inline styles only in `components/ui/`
+- [ ] All sizes use rem tokens; inline styles only in `components/primitives/`
 - [ ] UI uses configured UI kit (check `frontx.config.json`)
 - [ ] No console errors
 - [ ] TypeScript compiles without errors

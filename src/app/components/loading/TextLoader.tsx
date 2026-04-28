@@ -7,7 +7,7 @@
 
 import React from 'react';
 import { useTranslation } from '@cyberfabric/react';
-import { Skeleton } from '@/app/components/ui/skeleton';
+import { Skeleton } from '@/app/components/primitives/Skeleton';
 
 export interface TextLoaderProps {
   /** Child content to render when translations are loaded */

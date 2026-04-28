@@ -7,10 +7,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { eventBus } from '@cyberfabric/react';
-import { Star, Clock, Plus, ArrowRight, Database, FileText, GitBranch } from 'lucide-react';
-import { loadSpaces, toggleFavorite } from '@/app/actions/wikiActions';
+import {
+  Star, Clock, Plus, ArrowRight, Database, FileText,
+  GitBranch, MessageSquare, Edit3, GitPullRequest,
+} from 'lucide-react';
+import { loadSpaces, toggleFavorite, loadPullRequests } from '@/app/actions/wikiActions';
+import { loadAllComments } from '@/app/actions/enrichmentActions';
+import { loadDrafts } from '@/app/actions/draftChangeActions';
 import { Urls, type Space, type UserSpacePreference } from '@/app/api';
-import CreateSpaceModal from '@/app/components/CreateSpaceModal';
+import CreateSpaceModal from '@/app/components/space/CreateSpaceModal';
+import { PageTitle } from '@/app/layout';
 
 interface DashboardPageProps {
   navigate: (view: string) => void;
@@ -22,6 +28,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ navigate }) => {
   const [allSpaces, setAllSpaces] = useState<Space[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [changesCount, setChangesCount] = useState<number | null>(null);
+  const [reviewsCount, setReviewsCount] = useState<number | null>(null);
 
   useEffect(() => {
     const sub = eventBus.on('wiki/spaces/loaded', (payload) => {
@@ -30,8 +39,31 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ navigate }) => {
       setAllSpaces(payload.all);
       setLoading(false);
     });
+    const commentSub = eventBus.on('wiki/comments/all/loaded', ({ comments }) => {
+      setCommentCount(comments.filter((c) => !c.is_resolved).length);
+    });
+    const draftSub = eventBus.on('wiki/drafts/loaded', ({ drafts }) => {
+      setChangesCount(drafts.length);
+    });
+    const reviewSub = eventBus.on('wiki/my-reviews/loaded', ({ pullRequests, currentGitUsernames }) => {
+      const meSet = new Set(currentGitUsernames.map((u) => u.toLowerCase()));
+      const myReviews = pullRequests.filter((pr) =>
+        pr.reviewers.some((r) => meSet.has(r.username.toLowerCase())),
+      );
+      setReviewsCount(myReviews.length);
+    });
+
     loadSpaces();
-    return () => { sub.unsubscribe(); };
+    loadAllComments({ isResolved: false });
+    loadDrafts();
+    loadPullRequests();
+
+    return () => {
+      sub.unsubscribe();
+      commentSub.unsubscribe();
+      draftSub.unsubscribe();
+      reviewSub.unsubscribe();
+    };
   }, []);
 
   const handleNavigateToSpace = (spaceSlug: string) => {
@@ -63,15 +95,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ navigate }) => {
 
   return (
     <div className="h-full overflow-y-auto bg-background">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-            <p className="text-sm mt-1 text-muted-foreground">
-              Welcome back! Here are your spaces.
-            </p>
-          </div>
+      <PageTitle title="Dashboard" subtitle="Welcome back! Here are your spaces." />
+      {/* Toolbar */}
+      <div className="border-b border-border px-6 py-3">
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-primary text-primary-foreground hover:opacity-90"
@@ -84,6 +111,59 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ navigate }) => {
 
       {/* Content */}
       <div className="p-6 max-w-7xl mx-auto">
+        {/* Activity Indicators */}
+        <section className="mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <button
+              type="button"
+              onClick={() => navigate(Urls.Comments)}
+              className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:border-primary transition-all text-left"
+            >
+              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-950/40 flex items-center justify-center flex-shrink-0">
+                <MessageSquare size={20} className="text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-2xl font-bold text-foreground leading-tight">
+                  {commentCount ?? '—'}
+                </div>
+                <div className="text-xs text-muted-foreground">Open Comments</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate(Urls.Changes)}
+              className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:border-primary transition-all text-left"
+            >
+              <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-950/40 flex items-center justify-center flex-shrink-0">
+                <Edit3 size={20} className="text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-2xl font-bold text-foreground leading-tight">
+                  {changesCount ?? '—'}
+                </div>
+                <div className="text-xs text-muted-foreground">Pending Changes</div>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate(Urls.PRs)}
+              className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card hover:border-primary transition-all text-left"
+            >
+              <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-950/40 flex items-center justify-center flex-shrink-0">
+                <GitPullRequest size={20} className="text-green-600 dark:text-green-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-2xl font-bold text-foreground leading-tight">
+                  {reviewsCount ?? '—'}
+                </div>
+                <div className="text-xs text-muted-foreground">Pending Reviews</div>
+              </div>
+            </button>
+          </div>
+        </section>
+
         {/* Spaces Overview */}
         <section className="mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -110,7 +190,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ navigate }) => {
                     <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Provider</th>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Branch</th>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Visibility</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold uppercase text-muted-foreground">Last Synced</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -156,11 +235,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ navigate }) => {
                         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
                           {space.visibility}
                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-muted-foreground">
-                        {space.last_synced_at
-                          ? new Date(space.last_synced_at).toLocaleDateString()
-                          : 'Never'}
                       </td>
                     </tr>
                   ))}
@@ -294,7 +368,7 @@ function SpaceCard({ space, isFavorite, onNavigate, onToggleFavorite }: SpaceCar
           e.stopPropagation();
           onToggleFavorite();
         }}
-        className="absolute top-3 right-3 p-1.5 rounded-md bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+        className={`absolute top-3 right-3 p-1.5 rounded-md bg-muted transition-opacity ${isFavorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
         title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
       >
         <Star
@@ -320,9 +394,6 @@ function SpaceCard({ space, isFavorite, onNavigate, onToggleFavorite }: SpaceCar
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
         {space.git_provider && (
           <span className="capitalize">{space.git_provider.replace('_', ' ')}</span>
-        )}
-        {space.last_synced_at && (
-          <span>Synced {new Date(space.last_synced_at).toLocaleDateString()}</span>
         )}
       </div>
     </div>

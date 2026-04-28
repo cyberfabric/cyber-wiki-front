@@ -130,7 +130,6 @@ git diff --stat | tail -1
 
 - Maximum: **4000 LOC** per commit
 - Count: additions + deletions
-- Exclude: generated files, lock files, auto-formatted code
 
 **Action:**
 

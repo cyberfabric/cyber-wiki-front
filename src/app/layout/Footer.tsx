@@ -16,7 +16,9 @@ export const Footer: React.FC<FooterProps> = ({ children }) => {
   const footerState = useAppSelector((state) => state['layout/footer'] as FooterState | undefined);
   const visible = footerState?.visible ?? true;
 
-  if (!visible) {
+  // Hide both when explicitly invisible AND when there's nothing to show —
+  // an empty 40-px strip otherwise floats at the bottom of every page.
+  if (!visible || children === undefined || children === null || children === false) {
     return null;
   }
 

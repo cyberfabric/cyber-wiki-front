@@ -11,7 +11,7 @@ import {
   eventBus,
   type MenuState,
 } from '@cyberfabric/react';
-import { Home, ChevronDown, MessageSquare, Edit3 } from 'lucide-react';
+import { Home, ChevronDown, GitPullRequest, MessageSquare, Edit3, Star } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -20,11 +20,11 @@ import {
   SidebarMenuButton,
   SidebarMenuIcon,
   SidebarHeader,
-} from '@/app/components/ui/sidebar';
+} from '@/app/components/primitives/Sidebar';
 import { HAI3LogoIcon } from '@/app/icons/HAI3LogoIcon';
 import { HAI3LogoTextIcon } from '@/app/icons/HAI3LogoTextIcon';
 import { Urls } from '@/app/api';
-import type { Space } from '@/app/api';
+import type { Space, UserSpacePreference } from '@/app/api';
 import { loadSpaces } from '@/app/actions/wikiActions';
 
 const SPACE_COLORS = [
@@ -52,6 +52,7 @@ export const Menu: React.FC<MenuProps> = ({ children, navigate }) => {
   const collapsed = menuState?.collapsed ?? false;
 
   const [spaces, setSpaces] = useState<Space[]>([]);
+  const [favorites, setFavorites] = useState<UserSpacePreference[]>([]);
   const [spacesExpanded, setSpacesExpanded] = useState(true);
 
   const currentHash = window.location.hash.slice(1) || Urls.Dashboard;
@@ -60,7 +61,14 @@ export const Menu: React.FC<MenuProps> = ({ children, navigate }) => {
 
   useEffect(() => {
     const sub = eventBus.on('wiki/spaces/loaded', (payload) => {
-      setSpaces(payload.all);
+      const favSlugs = new Set((payload.favorites || []).map((f: UserSpacePreference) => f.space_slug));
+      const sorted = [...(payload.all || [])].sort((a, b) => {
+        const aFav = favSlugs.has(a.slug) ? 0 : 1;
+        const bFav = favSlugs.has(b.slug) ? 0 : 1;
+        return aFav - bFav;
+      });
+      setSpaces(sorted);
+      setFavorites(payload.favorites || []);
     });
     loadSpaces();
     return () => { sub.unsubscribe(); };
@@ -125,6 +133,18 @@ export const Menu: React.FC<MenuProps> = ({ children, navigate }) => {
               <span>Changes</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+
+          {/* PRs where I'm a reviewer */}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              isActive={currentView === Urls.PRs}
+              onClick={() => handleNavigate(Urls.PRs)}
+            >
+              <SidebarMenuIcon><GitPullRequest className="size-4" /></SidebarMenuIcon>
+              <span>PRs</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+
         </SidebarMenu>
 
         {/* MY SPACES section */}
@@ -158,6 +178,9 @@ export const Menu: React.FC<MenuProps> = ({ children, navigate }) => {
                           {space.name.charAt(0).toUpperCase()}
                         </span>
                         <span className="truncate">{space.name}</span>
+                        {favorites.some(f => f.space_slug === space.slug) && (
+                          <Star size={12} className="ml-auto shrink-0 fill-yellow-400 text-yellow-400" />
+                        )}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );

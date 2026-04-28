@@ -30,14 +30,19 @@ export class DraftChangesApiService extends BaseApiService {
     super({ baseURL: '/api/wiki/v1' }, restProtocol, restEndpoints);
   }
 
-  // List drafts (declarative, optional space filter)
-  readonly listAll = this.protocol(RestEndpointProtocol)
-    .query<DraftChangeListItem[]>('/draft-changes/');
-
-  readonly listForSpace = this.protocol(RestEndpointProtocol)
-    .queryWith<DraftChangeListItem[], { spaceId: string }>(
-      (p) => `/draft-changes/?space_id=${encodeURIComponent(p.spaceId)}`,
+  // List drafts (imperative — no cache so post-commit reloads see the
+  // authoritative state instead of a stale TanStack snapshot).
+  async listAll(): Promise<DraftChangeListItem[]> {
+    return this.protocol(RestProtocol).get<DraftChangeListItem[]>(
+      '/draft-changes/',
     );
+  }
+
+  async listForSpace(params: { spaceId: string }): Promise<DraftChangeListItem[]> {
+    return this.protocol(RestProtocol).get<DraftChangeListItem[]>(
+      `/draft-changes/?space_id=${encodeURIComponent(params.spaceId)}`,
+    );
+  }
 
   // Get one draft (declarative)
   readonly getById = this.protocol(RestEndpointProtocol)

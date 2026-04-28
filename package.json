@@ -55,7 +55,7 @@
     "clsx": "2.1.1",
     "date-fns": "4.1.0",
     "input-otp": "1.4.2",
-    "lodash": "4.17.21",
+    "lodash": "4.18.1",
     "lucide-react": "0.563.0",
     "react": "19.2.4",
     "react-day-picker": "9.12.0",
@@ -73,7 +73,7 @@
   "devDependencies": {
     "@cyberfabric/cli": "alpha",
     "@eslint/js": "9.27.0",
-    "@j178/prek": "0.2.25",
+    "@j178/prek": "0.3.11",
     "@module-federation/vite": "^1.14.2",
     "@types/lodash": "4.17.20",
     "@types/node": "^25.6.0",
@@ -99,6 +99,11 @@
   },
   "overrides": {
     "react": "$react",
-    "react-dom": "$react-dom"
+    "react-dom": "$react-dom",
+    "@isaacs/brace-expansion": "5.0.1",
+    "axios": "1.15.2",
+    "lodash": "$lodash",
+    "minimatch": "10.2.5",
+    "picomatch": "4.0.4"
   }
 }

@@ -38,7 +38,7 @@ import {
   type DiffHunk,
   type EditEnrichment,
 } from '@/app/api';
-import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
 
 interface ChangesTabProps {
   currentFilePath?: string;

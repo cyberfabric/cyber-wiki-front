@@ -7,11 +7,12 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppSelector, useTheme, eventBus, type HeaderState } from '@cyberfabric/react';
-import { User, LogOut, Sun, Moon, Monitor, Palette, Settings, AlertTriangle } from 'lucide-react';
-import { Avatar, AvatarImage, AvatarFallback } from '@/app/components/ui/avatar';
-import { Skeleton } from '@/app/components/ui/skeleton';
+import { User, LogOut, Sun, Moon, Monitor, Palette, Settings, KeyRound, AlertTriangle } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/app/components/primitives/Avatar';
+import { Skeleton } from '@/app/components/primitives/Skeleton';
 import { logoutAction } from '@/app/actions/bootstrapActions';
 import { Urls } from '@/app/api';
+import { usePageHeader } from './PageHeader';
 
 export interface HeaderProps {
   children?: React.ReactNode;
@@ -93,8 +94,22 @@ export const Header: React.FC<HeaderProps> = ({ children }) => {
     }
   };
 
+  const { title: pageTitle, subtitle: pageSubtitle } = usePageHeader();
+
   return (
     <header className="h-16 flex items-center px-4 border-b border-border bg-background">
+      {pageTitle && (
+        <div className="min-w-0 mr-4">
+          <h1 className="text-lg font-semibold text-foreground truncate leading-tight">
+            {pageTitle}
+          </h1>
+          {pageSubtitle && (
+            <p className="text-xs text-muted-foreground truncate leading-tight mt-0.5">
+              {pageSubtitle}
+            </p>
+          )}
+        </div>
+      )}
       {children}
       <div className="ml-auto flex items-center gap-2">
         {/* Theme selector */}
@@ -130,7 +145,7 @@ export const Header: React.FC<HeaderProps> = ({ children }) => {
         {tokenFailures.length > 0 && (
           <div className="relative group">
             <button
-              onClick={() => { window.location.hash = 'profile'; }}
+              onClick={() => { window.location.hash = Urls.Tokens; }}
               className="flex items-center p-1.5 rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors"
               title="Service token issues detected"
             >
@@ -174,11 +189,18 @@ export const Header: React.FC<HeaderProps> = ({ children }) => {
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 w-48 rounded-md border border-border bg-popover shadow-lg py-1 z-50">
                 <button
-                  onClick={() => { window.location.hash = 'profile'; setMenuOpen(false); }}
+                  onClick={() => { window.location.hash = Urls.Profile; setMenuOpen(false); }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-popover-foreground hover:bg-accent transition-colors"
                 >
                   <User size={16} />
                   Profile
+                </button>
+                <button
+                  onClick={() => { window.location.hash = Urls.Tokens; setMenuOpen(false); }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-popover-foreground hover:bg-accent transition-colors"
+                >
+                  <KeyRound size={16} />
+                  Tokens
                 </button>
                 <button
                   onClick={() => { window.location.hash = Urls.SpaceConfiguration; setMenuOpen(false); }}

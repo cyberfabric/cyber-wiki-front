@@ -7,7 +7,7 @@
  */
 
 import { ArrowLeft, Filter, MessageSquare, Pencil, Save, X } from 'lucide-react';
-import { ViewModeSwitcher } from '@/app/components/ViewModeSwitcher';
+import { ViewModeSwitcher } from '@/app/components/file/ViewModeSwitcher';
 import { FileViewMode } from '@/app/api';
 
 export enum ContentFilterType {

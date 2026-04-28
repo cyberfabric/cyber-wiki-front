@@ -10,7 +10,8 @@ import { eventBus } from '@cyberfabric/react';
 import { Search, Plus, Star, Grid, List } from 'lucide-react';
 import { loadSpaces, toggleFavorite } from '@/app/actions/wikiActions';
 import { Urls, type Space, type UserSpacePreference } from '@/app/api';
-import CreateSpaceModal from '@/app/components/CreateSpaceModal';
+import CreateSpaceModal from '@/app/components/space/CreateSpaceModal';
+import { PageTitle } from '@/app/layout';
 
 interface SpacesPageProps {
   navigate: (view: string) => void;
@@ -66,15 +67,10 @@ const SpacesPage: React.FC<SpacesPageProps> = ({ navigate }) => {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Spaces</h1>
-            <p className="text-sm mt-1 text-muted-foreground">
-              Browse and manage your documentation spaces
-            </p>
-          </div>
+      <PageTitle title="Spaces" subtitle="Browse and manage your documentation spaces" />
+      {/* Toolbar */}
+      <div className="border-b border-border px-6 py-4">
+        <div className="flex items-center justify-end mb-3">
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all bg-primary text-primary-foreground hover:opacity-90"

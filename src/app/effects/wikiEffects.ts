@@ -8,6 +8,7 @@
 import { eventBus, apiRegistry } from '@cyberfabric/react';
 import { SpacesApiService, TreeNodeType, type TreeNode } from '@/app/api';
 import { FileMappingApiService } from '@/app/api/FileMappingApiService';
+import { extractErrorMessage } from '@/app/lib/errorMessage';
 
 export function registerWikiEffects(): void {
   // Load spaces (favorites + recent + all)
@@ -78,8 +79,9 @@ export function registerWikiEffects(): void {
         eventBus.emit('wiki/tree/loaded', { tree: response.tree, path });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load file tree';
-      eventBus.emit('wiki/tree/error', { error: message });
+      eventBus.emit('wiki/tree/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to load file tree'),
+      });
     }
   });
 
@@ -110,7 +112,7 @@ export function registerWikiEffects(): void {
       });
       eventBus.emit('wiki/tree/loaded', { tree, path });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load subtree';
+      const message = extractErrorMessage(error instanceof Error ? error : null, 'Failed to load subtree');
       eventBus.emit('wiki/tree/error', { error: message });
     }
   });
@@ -125,8 +127,9 @@ export function registerWikiEffects(): void {
         eventBus.emit('wiki/spaces/load');
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to create space';
-      eventBus.emit('wiki/space/error', { error: message });
+      eventBus.emit('wiki/space/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to create space'),
+      });
     }
   });
 
@@ -138,8 +141,9 @@ export function registerWikiEffects(): void {
       eventBus.emit('wiki/space/updated', { space });
       eventBus.emit('wiki/spaces/load');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to update space';
-      eventBus.emit('wiki/space/error', { error: message });
+      eventBus.emit('wiki/space/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to update space'),
+      });
     }
   });
 
@@ -151,8 +155,9 @@ export function registerWikiEffects(): void {
       eventBus.emit('wiki/space/deleted', { slug });
       eventBus.emit('wiki/spaces/load');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to delete space';
-      eventBus.emit('wiki/space/error', { error: message });
+      eventBus.emit('wiki/space/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to delete space'),
+      });
     }
   });
 
@@ -185,8 +190,10 @@ export function registerWikiEffects(): void {
       fileContentCache.set(key, content);
       eventBus.emit('wiki/file/loaded', { filePath, content });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load file content';
-      eventBus.emit('wiki/file/error', { filePath, error: message });
+      eventBus.emit('wiki/file/error', {
+        filePath,
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to load file content'),
+      });
     }
   });
 
@@ -204,5 +211,23 @@ export function registerWikiEffects(): void {
   // Navigate — update hash
   eventBus.on('wiki/navigate', ({ hash }) => {
     window.location.hash = hash;
+  });
+
+  // PRs — load open pull requests with optional author/reviewer filter
+  eventBus.on('wiki/my-reviews/load', async ({ author, reviewer }) => {
+    try {
+      if (!apiRegistry.has(SpacesApiService)) return;
+      const service = apiRegistry.getService(SpacesApiService);
+      const data = await service.getPullRequests({ author, reviewer });
+      eventBus.emit('wiki/my-reviews/loaded', {
+        pullRequests: data.pull_requests || [],
+        currentGitUsernames: data.current_git_usernames || [],
+      });
+    } catch (error) {
+      console.error('Failed to load pull requests:', error);
+      eventBus.emit('wiki/my-reviews/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to load pull requests'),
+      });
+    }
   });
 }

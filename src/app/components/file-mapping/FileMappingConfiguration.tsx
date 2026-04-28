@@ -11,9 +11,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { eventBus } from '@cyberfabric/react';
 import { Plus, X } from 'lucide-react';
-import { FileMappingConfigPanel } from '@/app/components/FileMappingConfigPanel';
-import { FileMappingPreview } from '@/app/components/FileMappingPreview';
-import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
+import { FileMappingConfigPanel } from '@/app/components/file-mapping/FileMappingConfigPanel';
+import { FileMappingPreview } from '@/app/components/file-mapping/FileMappingPreview';
+import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
 import {
   loadFileMappings,
   refreshFileMappings,

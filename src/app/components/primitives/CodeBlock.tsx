@@ -3,7 +3,7 @@
  *
  * Syntax-highlighted code block using react-syntax-highlighter.
  * Wraps Prism highlighter with theme-aware dark/light switching.
- * Inline styles are allowed here per project rules (components/ui/).
+ * Inline styles are allowed here per project rules (components/primitives/).
  */
 
 import React, { useMemo } from 'react';

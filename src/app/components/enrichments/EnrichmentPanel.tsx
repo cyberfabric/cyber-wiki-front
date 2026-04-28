@@ -12,11 +12,14 @@ import React, { useEffect, useState } from 'react';
 import { eventBus } from '@cyberfabric/react';
 import {
   AlertCircle,
+  Check,
+  Clock,
   Edit3,
   FileEdit,
   GitBranch,
   GitPullRequest,
   MessageSquare,
+  User,
 } from 'lucide-react';
 import { CommentsTab } from './CommentsTab';
 import { ChangesTab } from './ChangesTab';
@@ -28,6 +31,7 @@ import {
   type EnrichmentsResponse,
   type LocalChangeEnrichment,
   type PREnrichment,
+  type PRReviewer,
 } from '@/app/api/wikiTypes';
 
 interface EnrichmentPanelProps {
@@ -263,6 +267,31 @@ function DiffsTabContent({ diffs }: { diffs: DiffEnrichment[] }) {
 // PRsTabContent
 // =============================================================================
 
+function ReviewerBadge({ reviewer }: { reviewer: PRReviewer }) {
+  const isApproved = reviewer.status === 'APPROVED';
+  return (
+    <div className="flex items-center gap-1.5" title={`${reviewer.display_name} — ${reviewer.status}`}>
+      {reviewer.avatar_url ? (
+        <img
+          src={reviewer.avatar_url}
+          alt={reviewer.display_name}
+          className="w-5 h-5 rounded-full"
+        />
+      ) : (
+        <div className="w-5 h-5 rounded-full bg-accent flex items-center justify-center">
+          <User size={12} className="text-muted-foreground" />
+        </div>
+      )}
+      <span className="text-xs text-foreground">{reviewer.display_name || reviewer.username}</span>
+      {isApproved ? (
+        <Check size={12} className="text-green-600" />
+      ) : (
+        <Clock size={12} className="text-yellow-600" />
+      )}
+    </div>
+  );
+}
+
 function PRsTabContent({ prs }: { prs: PREnrichment[] }) {
   if (prs.length === 0) {
     return (
@@ -286,12 +315,22 @@ function PRsTabContent({ prs }: { prs: PREnrichment[] }) {
           <div className="text-xs text-muted-foreground">
             by {pr.pr_author} · {pr.pr_state}
           </div>
+          {pr.reviewers && pr.reviewers.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-border">
+              <div className="text-xs text-muted-foreground mb-1.5">Reviewers</div>
+              <div className="flex flex-wrap gap-2">
+                {pr.reviewers.map((r) => (
+                  <ReviewerBadge key={r.username} reviewer={r} />
+                ))}
+              </div>
+            </div>
+          )}
           {pr.pr_url && (
             <a
               href={pr.pr_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-primary hover:underline mt-1 inline-block"
+              className="text-xs text-primary hover:underline mt-2 inline-block"
             >
               View PR →
             </a>

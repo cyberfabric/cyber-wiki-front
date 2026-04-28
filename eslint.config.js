@@ -597,4 +597,11 @@ export default [
       'local/no-inline-styles': 'off',
     },
   },
+  // Primitives may use inline styles for third-party component APIs (e.g. SyntaxHighlighter customStyle)
+  {
+    files: ['src/app/components/primitives/**/*.tsx'],
+    rules: {
+      'local/no-inline-styles': 'off',
+    },
+  },
 ];

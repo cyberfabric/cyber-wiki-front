@@ -5,7 +5,7 @@
  * and raw line-numbered source view for all files.
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { eventBus } from '@cyberfabric/react';
 import {
   FileText,
@@ -15,15 +15,20 @@ import {
   Check,
   Eye,
   Code,
+  GitCompare,
+  GitCommit,
   MessageSquare,
   Pencil,
   Save,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import FileRenderer from './FileRenderer';
 import { MdRenderer } from './MdRenderer';
-import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
-import { getDraft, saveDraft } from '@/app/actions/draftChangeActions';
+import { DraftDiffView } from '@/app/components/changes/DraftDiffView';
+import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
+import { commitDrafts, getDraft, saveDraft } from '@/app/actions/draftChangeActions';
 import {
   EditChangeType,
   FileType,
@@ -59,6 +64,15 @@ interface FileViewerProps {
   /** ID of the pending draft (if any). When set, FileViewer fetches the
    *  draft content and shows it (instead of the original) in read mode. */
   draftId?: string;
+  /** Lines (1-based) that have at least one comment anchored to them.
+   *  Drives the gutter marker so the user can spot commented lines at a
+   *  glance without scrolling through the comments panel. */
+  commentLines?: Set<number>;
+  /** Optional file-tree visibility toggle. When provided, FileViewer renders
+   *  a button on the left side of its header so the user can reclaim the
+   *  tree's horizontal space without leaving the page. */
+  showTree?: boolean;
+  onToggleTree?: () => void;
 }
 
 // ─── FileViewer ──────────────────────────────────────────────────────────────
@@ -78,6 +92,9 @@ const FileViewer: React.FC<FileViewerProps> = ({
   commentsCount,
   hasUnsavedDraft,
   draftId,
+  commentLines,
+  showTree,
+  onToggleTree,
 }) => {
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,6 +123,10 @@ const FileViewer: React.FC<FileViewerProps> = ({
   const [draftContent, setDraftContent] = useState<string | null>(null);
   const [showDraft, setShowDraft] = useState(true);
 
+  // Commit dialog (single-file commit from this header).
+  const [commitOpen, setCommitOpen] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+
   const fileName = filePath.split('/').pop() || filePath;
   const breadcrumb = filePath.split('/').slice(0, -1).join(' / ');
   const languageLabel = useMemo(() => getLanguageLabel(fileName), [fileName]);
@@ -118,6 +139,67 @@ const FileViewer: React.FC<FileViewerProps> = ({
   const isPreviewable = hasUsefulPreview;
   const isDirty = isEditMode && content !== null && draft !== content;
 
+  // Lines that differ between the on-disk file and the unsaved draft —
+  // computed via the longest common subsequence so a single insertion near
+  // the top doesn't paint everything below it yellow. Index-based comparison
+  // (the previous approach) marked every line after a shift as changed.
+  //
+  // The LCS table is O(N*M); for unusually large files we bail out and skip
+  // the highlight rather than freezing the UI.
+  const changedLines = useMemo<Set<number> | undefined>(() => {
+    if (!showDraft || draftContent === null || content === null) return undefined;
+    if (draftContent === content) return undefined;
+    // Normalize line endings before diffing so a CRLF vs LF mismatch
+    // (common when the on-disk file was saved on Windows but the draft was
+    // produced in the browser) doesn't flag every single line as changed.
+    const orig = content.replace(/\r\n?/g, '\n').split('\n');
+    const draftL = draftContent.replace(/\r\n?/g, '\n').split('\n');
+    const n = orig.length;
+    const m = draftL.length;
+    // ~25M cells — keeps the diff responsive on typical wiki files but
+    // refuses to lock up on enormous ones.
+    if (n * m > 25_000_000) return undefined;
+
+    // dp[i][j] = LCS length of orig[0..i) and draftL[0..j).
+    const dp: Uint32Array[] = Array.from(
+      { length: n + 1 },
+      () => new Uint32Array(m + 1),
+    );
+    for (let i = 1; i <= n; i++) {
+      const a = orig[i - 1];
+      const row = dp[i];
+      const prev = dp[i - 1];
+      for (let j = 1; j <= m; j++) {
+        if (a === draftL[j - 1]) {
+          row[j] = prev[j - 1] + 1;
+        } else {
+          row[j] = prev[j] >= row[j - 1] ? prev[j] : row[j - 1];
+        }
+      }
+    }
+
+    // Backtrack — every draft line not part of the LCS is "changed".
+    const inLcs = new Uint8Array(m);
+    let i = n;
+    let j = m;
+    while (i > 0 && j > 0) {
+      if (orig[i - 1] === draftL[j - 1]) {
+        inLcs[j - 1] = 1;
+        i--;
+        j--;
+      } else if (dp[i - 1][j] > dp[i][j - 1]) {
+        i--;
+      } else {
+        j--;
+      }
+    }
+    const out = new Set<number>();
+    for (let k = 0; k < m; k++) {
+      if (!inLcs[k]) out.add(k + 1);
+    }
+    return out;
+  }, [showDraft, draftContent, content]);
+
   // Force Source mode when no useful preview is available.
   useEffect(() => {
     if (!hasUsefulPreview && viewMode !== FileViewMode.Source) {
@@ -125,24 +207,29 @@ const FileViewer: React.FC<FileViewerProps> = ({
     }
   }, [hasUsefulPreview, viewMode, setViewMode]);
 
-  // Listen for file content events
+  // Listen for file content events. Subscriptions are mounted **once** so we
+  // don't miss events fired during the unmount/remount window when the parent
+  // calls `openFile()` synchronously after a deep-link change. Path comparison
+  // goes through a ref so stale payloads for other files are still ignored.
+  const filePathRef = useRef(filePath);
+  filePathRef.current = filePath;
   useEffect(() => {
     const subLoading = eventBus.on('wiki/file/loading', (payload) => {
-      if (payload.filePath === filePath) {
+      if (payload.filePath === filePathRef.current) {
         setLoading(true);
         setError(null);
         setContent(null);
       }
     });
     const subLoaded = eventBus.on('wiki/file/loaded', (payload) => {
-      if (payload.filePath === filePath) {
+      if (payload.filePath === filePathRef.current) {
         setContent(payload.content);
         setDraft(payload.content);
         setLoading(false);
       }
     });
     const subError = eventBus.on('wiki/file/error', (payload) => {
-      if (payload.filePath === filePath) {
+      if (payload.filePath === filePathRef.current) {
         setError(payload.error);
         setLoading(false);
       }
@@ -153,7 +240,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
       subLoaded.unsubscribe();
       subError.unsubscribe();
     };
-  }, [filePath]);
+  }, []);
 
   // Reset edit state when path changes
   useEffect(() => {
@@ -162,6 +249,25 @@ const FileViewer: React.FC<FileViewerProps> = ({
     setShowDraft(true);
     setDraftContent(null);
   }, [filePath]);
+
+  // Fallback for newly-created files that don't exist on disk yet. The
+  // backend's file-content endpoint 500s because there's nothing to read,
+  // but we have a draft with the user's content. Once we have the draft
+  // body, treat the original as empty and clear any error/loading state so
+  // the viewer can render the draft + diff against an empty baseline.
+  //
+  // Watches `error` too, because wiki/file/error sometimes arrives *after*
+  // the draft body has loaded (the file fetch is slower than the draft
+  // fetch). Without this, the error banner would briefly succeed and then
+  // get re-set by the late event.
+  useEffect(() => {
+    if (!draftId || draftContent === null) return;
+    if (content === null) {
+      setContent('');
+      setLoading(false);
+    }
+    if (error) setError(null);
+  }, [content, error, draftId, draftContent]);
 
   // Fetch draft content whenever the active draftId changes — show "my
   // version" in read mode so changes are visible without entering Edit.
@@ -270,8 +376,96 @@ const FileViewer: React.FC<FileViewerProps> = ({
         onCancel={() => setPendingDiscard(false)}
       />
 
+      {/* Commit dialog — single-file commit. The Changes page is still the
+          place for multi-file commits and PR creation; this is a quick path
+          for the file the user is currently looking at. */}
+      {commitOpen && draftId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md mx-4 rounded-lg shadow-xl bg-card border border-border">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+              <h3 className="text-base font-semibold text-foreground">Commit changes</h3>
+              <button
+                type="button"
+                onClick={() => setCommitOpen(false)}
+                className="p-1 rounded text-muted-foreground hover:bg-muted"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Commit your draft for <span className="font-medium text-foreground">{fileName}</span>{' '}
+                to the repository. This creates a real commit on a user branch — your team
+                will be able to see and review it.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1.5">
+                  Commit message <span className="text-destructive">*</span>
+                </label>
+                <textarea
+                  value={commitMessage}
+                  onChange={(e) => setCommitMessage(e.target.value)}
+                  onFocus={(e) => e.currentTarget.select()}
+                  placeholder="Describe what you changed"
+                  rows={3}
+                  required
+                  className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                For multi-file commits or to open a pull request, use the{' '}
+                <a href="#changes" className="underline hover:text-foreground">
+                  Changes page
+                </a>
+                .
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setCommitOpen(false)}
+                className="px-3 py-1.5 rounded-md text-sm text-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const message = commitMessage.trim();
+                  if (!message) return;
+                  commitDrafts([draftId], message);
+                  setCommitOpen(false);
+                }}
+                disabled={!commitMessage.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={
+                  !commitMessage.trim()
+                    ? 'Enter a commit message first'
+                    : 'Commit'
+                }
+              >
+                <GitCommit size={14} />
+                Commit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="border-b border-border px-4 py-2 flex items-center gap-3 bg-muted">
+        {/* Tree toggle — reclaim horizontal space when reading. */}
+        {onToggleTree && (
+          <button
+            type="button"
+            onClick={onToggleTree}
+            className="p-1.5 rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground flex-shrink-0"
+            title={showTree ? 'Hide file tree' : 'Show file tree'}
+          >
+            {showTree ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
+          </button>
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <FileText size={14} className="text-muted-foreground flex-shrink-0" />
@@ -336,22 +530,42 @@ const FileViewer: React.FC<FileViewerProps> = ({
           </>
         ) : (
           spaceId && (
-            <button
-              onClick={handleStartEdit}
-              disabled={!content}
-              title="Edit file"
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-border bg-background text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-            >
-              <Pencil size={12} />
-              Edit
-            </button>
+            <>
+              <button
+                onClick={handleStartEdit}
+                disabled={content === null}
+                title="Edit file"
+                className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-border bg-background text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                <Pencil size={12} />
+                Edit
+              </button>
+              {hasUnsavedDraft && draftId && (
+                <button
+                  onClick={() => {
+                    // Pre-fill a sensible commit message so the dialog isn't
+                    // a forced typing exercise — the user can hit Commit
+                    // immediately or refine the wording. Backend rejects
+                    // empty messages, so we don't ship the empty state.
+                    setCommitMessage(`Update ${fileName}`);
+                    setCommitOpen(true);
+                  }}
+                  title="Commit this draft to the repository"
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 flex-shrink-0"
+                >
+                  <GitCommit size={12} />
+                  Commit
+                </button>
+              )}
+            </>
           )
         )}
 
-        {/* View mode toggle (Preview / Source) — hidden for plain-text files
-            where Preview adds nothing. In markdown edit, Source = raw textarea
-            and Preview = WYSIWYG (Milkdown). */}
-        {hasUsefulPreview && (
+        {/* View mode toggle (Preview / Source / Diff) — Preview is hidden for
+            plain-text files; Diff appears only when there's an unsaved draft
+            that actually differs from the on-disk version. In markdown edit,
+            Source = raw textarea and Preview = WYSIWYG (Milkdown). */}
+        {(hasUsefulPreview || (hasUnsavedDraft && draftContent !== null)) && !isEditMode && (
           <div className="flex items-center border border-border rounded overflow-hidden flex-shrink-0">
             {isPreviewable && (
               <button
@@ -369,8 +583,21 @@ const FileViewer: React.FC<FileViewerProps> = ({
             >
               <Code size={14} />
             </button>
+            {hasUnsavedDraft && draftContent !== null && content !== null && (
+              <button
+                onClick={() => setViewMode(FileViewMode.Diff)}
+                className={`p-1.5 transition-colors ${viewMode === FileViewMode.Diff ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+                title="Diff — see exactly what changed"
+              >
+                <GitCompare size={14} />
+              </button>
+            )}
           </div>
         )}
+        {/* Same toggle but minimal — Source only — for read mode on a
+            plain-text file with no draft (so the user still has the toggle
+            disabled-looking but consistent layout). */}
+        {!hasUsefulPreview && !(hasUnsavedDraft && draftContent !== null) && !isEditMode && null}
 
         {/* Copy — hidden in edit mode (would copy stale content vs draft). */}
         {!isEditMode && (
@@ -428,7 +655,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
         </div>
       )}
 
-      {!loading && !error && content !== null && !isEditMode && (
+      {!loading && !error && content !== null && !isEditMode && viewMode !== FileViewMode.Diff && (
         <div className="flex-1 overflow-auto">
           <FileRenderer
             content={
@@ -438,6 +665,17 @@ const FileViewer: React.FC<FileViewerProps> = ({
             mode={viewMode}
             selectedLines={selectedLines}
             onLineClick={onLineClick}
+            commentLines={commentLines}
+            changedLines={changedLines}
+          />
+        </div>
+      )}
+
+      {!loading && !error && content !== null && !isEditMode && viewMode === FileViewMode.Diff && (
+        <div className="flex-1 overflow-auto">
+          <DraftDiffView
+            original={content}
+            modified={draftContent ?? content}
           />
         </div>
       )}

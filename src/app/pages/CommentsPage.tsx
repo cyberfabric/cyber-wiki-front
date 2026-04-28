@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { loadAllComments } from '@/app/actions/enrichmentActions';
 import { loadSpaces } from '@/app/actions/wikiActions';
+import { PageTitle } from '@/app/layout';
 import { Urls, buildSourceUri, type CommentData, type Space } from '@/app/api';
 
 interface CommentsPageProps {
@@ -41,14 +42,42 @@ interface SourceGroup {
 /**
  * Source URI shape: `git://{provider}/{projectKey}_{repoSlug}/{branch}/{path}`.
  * We extract the file path from the URI; the space slug is resolved by
- * matching the URI against `buildSourceUri(space, filePath)` for each known
- * space (fast — there's typically only a handful of spaces).
+ * matching `provider` + `{projectKey}_{repoSlug}` against each known space.
+ *
+ * Intentionally ignores the branch segment — the comment was created
+ * against whatever the backend treated as the default branch at that
+ * moment, but the space's stored `git_default_branch` may have drifted
+ * (or was never persisted), and an exact-equality match would silently
+ * fail and bounce the user to the spaces list.
  */
 function parseSourceUri(uri: string, spaces: Space[]): { spaceSlug: string | null; filePath: string } {
-  const match = /^git:\/\/[^/]+\/[^/]+\/[^/]+\/(.+)$/.exec(uri);
-  const filePath = match ? match[1] : uri;
-  const space = spaces.find((s) => buildSourceUri(s, filePath) === uri);
-  return { spaceSlug: space?.slug ?? null, filePath };
+  const match = /^git:\/\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/.exec(uri);
+  if (!match) {
+    // Unrecognised URI shape — fall back to a full-string match in case
+    // some other producer wrote a non-canonical URI.
+    const exact = spaces.find((s) => buildSourceUri(s, uri) === uri);
+    return { spaceSlug: exact?.slug ?? null, filePath: uri };
+  }
+  const [, provider, repoBlob, , filePath] = match;
+  // Try the canonical equality first — it's still the most accurate when
+  // everything lines up.
+  const exact = spaces.find((s) => buildSourceUri(s, filePath) === uri);
+  if (exact) return { spaceSlug: exact.slug, filePath };
+  // Branch-tolerant fallback: match on provider + project_key/repo_slug.
+  const lenient = spaces.find((s) => {
+    const repo = `${s.git_project_key ?? ''}_${s.git_repository_id ?? ''}`;
+    return (s.git_provider ?? 'local_git') === provider && repo === repoBlob;
+  });
+  if (lenient) return { spaceSlug: lenient.slug, filePath };
+  // Repo-slug-only fallback: the project key in the URI may differ from the
+  // current space config (e.g. personal fork `~user` vs project key `PROJ`).
+  // Match when the provider is the same and the repo slug (after the last `_`)
+  // equals `git_repository_id`.
+  const repoSlug = repoBlob.includes('_') ? repoBlob.slice(repoBlob.lastIndexOf('_') + 1) : repoBlob;
+  const byRepo = spaces.find((s) => {
+    return (s.git_provider ?? 'local_git') === provider && s.git_repository_id === repoSlug;
+  });
+  return { spaceSlug: byRepo?.slug ?? null, filePath };
 }
 
 function groupBySource(comments: CommentData[], spaces: Space[]): SourceGroup[] {
@@ -162,14 +191,21 @@ function CommentsPage({ navigate }: CommentsPageProps) {
 
   const handleOpen = (group: SourceGroup, comment: CommentData) => {
     if (!group.spaceSlug) {
-      // We can't reliably figure out the space slug from a git:// URI; route
-      // the user to the spaces list so they pick the right space.
       navigate(Urls.Spaces);
       return;
     }
     const params = new URLSearchParams({
       space: group.spaceSlug,
       file: group.filePath,
+      // `comments=1` is a hint to SpaceViewPage to open the Comments panel
+      // even for document-level comments where there's no specific line to
+      // anchor on. Without it, clicking a `doc` comment would just open the
+      // file with no visible cue.
+      comments: '1',
+      // Pass the original source_uri so SpaceViewPage can load comments
+      // using the exact URI stored in the backend, even if the space's
+      // git_project_key has since changed.
+      source_uri: group.sourceUri,
     });
     if (comment.line_start) {
       params.set('line', String(comment.line_start));
@@ -179,14 +215,9 @@ function CommentsPage({ navigate }: CommentsPageProps) {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="max-w-5xl p-6 space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Comments</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              All comments across the documents you have access to.
-            </p>
-          </div>
+      <PageTitle title="Comments" subtitle="All comments across the documents you have access to." />
+      <div className="max-w-7xl p-6 space-y-4">
+        <div className="flex items-center justify-end flex-wrap gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <Filter size={14} className="text-muted-foreground" />
             <select

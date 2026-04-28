@@ -15,9 +15,10 @@ import {
   ChevronDown,
   Loader2,
   AlertCircle,
+  Eye,
   Code,
-  BookOpen,
   ArrowLeft,
+  FilePlus,
   ChevronsDownUp,
   ChevronsUpDown,
   Layers,
@@ -41,7 +42,8 @@ import {
   ViewMode,
   buildSourceUri,
 } from '@/app/api';
-import FileViewer from '@/app/components/FileViewer';
+import FileViewer from '@/app/components/file/FileViewer';
+import { CreateFileModal } from '@/app/components/file/CreateFileModal';
 
 function collectAllDirPaths(nodes: TreeNode[]): string[] {
   const paths: string[] = [];
@@ -70,10 +72,24 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
   const [loading, setLoading] = useState(true);
   const [showEnrichments, setShowEnrichments] = useState(false);
   const [selectedLines, setSelectedLines] = useState<{ start: number; end: number } | null>(null);
+  /** A deep-linked file path that we still need to auto-expand parent folders
+   *  for. Cleared once every ancestor along the path has been expanded. */
+  const [pendingExpandPath, setPendingExpandPath] = useState<string | null>(null);
   // Preserved across file navigation so picking Source on one file keeps the
   // next file in Source too (only meaningful for markdown).
   const [fileViewMode, setFileViewMode] = useState<FileViewMode>(FileViewMode.Preview);
   const [commentsCount, setCommentsCount] = useState(0);
+  /** Lines that have at least one comment anchored to them in the current
+   *  file — passed down to FileViewer for the gutter marker. */
+  const [commentLines, setCommentLines] = useState<Set<number>>(new Set());
+  /** Tree sidebar visibility — toggled from the FileViewer header so the user
+   *  can reclaim horizontal space when reading. */
+  const [showTree, setShowTree] = useState(true);
+  /** Open state for the GitHub-style "create new file in repo" dialog. */
+  const [showCreateFile, setShowCreateFile] = useState(false);
+  /** Override source_uri from deep-link (e.g. CommentsPage passes the
+   *  original URI when the space's git_project_key has changed). */
+  const [overrideSourceUri, setOverrideSourceUri] = useState<string | null>(null);
   /** Maps file_path → draft_id for the current space (pending drafts). */
   const [draftsByPath, setDraftsByPath] = useState<Map<string, string>>(new Map());
   /** Convenience set of paths with pending drafts (drives tree dot + header badge). */
@@ -113,18 +129,34 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
       const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
       const filePath = params.get('file');
       const line = params.get('line');
+      // CommentsPage may pass the original source_uri when the space's
+      // git_project_key has drifted — use it so EnrichmentPanel loads the
+      // correct comments from the backend.
+      const sourceUriParam = params.get('source_uri');
+      setOverrideSourceUri(sourceUriParam);
       if (filePath) {
         setSelectedFilePath(filePath);
         openFile(space, filePath);
+        // Drive parent-folder auto-expansion (lazy-loaded subtree per level).
+        setPendingExpandPath(filePath);
         if (line && Number.isFinite(Number(line))) {
           const n = Number(line);
           setSelectedLines({ start: n, end: n });
+          // Open the Comments / enrichments panel so the targeted line is
+          // immediately visible — that's the whole point of the deep-link.
+          setShowEnrichments(true);
         } else {
           setSelectedLines(null);
+          // Document-level deep-link from CommentsPage uses `?comments=1`
+          // when there's no specific line to highlight.
+          if (params.get('comments') === '1') {
+            setShowEnrichments(true);
+          }
         }
       } else {
         setSelectedFilePath(null);
         setSelectedLines(null);
+        setPendingExpandPath(null);
       }
     });
     return () => { sub.unsubscribe(); };
@@ -134,12 +166,24 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
   useEffect(() => {
     if (!selectedSpace || !selectedFilePath) {
       setCommentsCount(0);
+      setCommentLines(new Set());
       return undefined;
     }
-    const sourceUri = buildSourceUri(selectedSpace, selectedFilePath);
+    const sourceUri = overrideSourceUri || buildSourceUri(selectedSpace, selectedFilePath);
     const loadedSub = eventBus.on('wiki/comments/loaded', (payload) => {
       if (payload.sourceUri === sourceUri) {
-        setCommentsCount(payload.comments?.length ?? 0);
+        const list = payload.comments ?? [];
+        setCommentsCount(list.length);
+        const lines = new Set<number>();
+        for (const c of list) {
+          if (c.line_start) {
+            const end = c.line_end ?? c.line_start;
+            for (let n = c.line_start; n <= end; n++) {
+              lines.add(n);
+            }
+          }
+        }
+        setCommentLines(lines);
       }
     });
     // Refresh count whenever a comment was created/deleted/resolved on this URI.
@@ -154,7 +198,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
       loadedSub.unsubscribe();
       subs.forEach((s) => s.unsubscribe());
     };
-  }, [selectedSpace, selectedFilePath]);
+  }, [selectedSpace, selectedFilePath, overrideSourceUri]);
 
   // Track which files in this space have pending drafts (used to mark them
   // in the tree, header, and to load draft content into the renderer).
@@ -180,6 +224,72 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
       refreshSubs.forEach((s) => s.unsubscribe());
     };
   }, [selectedSpace]);
+
+  // Auto-expand ancestor folders for a deep-linked file. Each tree update
+  // walks one level deeper: expand the next ancestor and lazy-load its
+  // children if the backend hasn't returned them yet. Runs until every
+  // ancestor along the path is expanded with children loaded.
+  useEffect(() => {
+    if (!pendingExpandPath || !selectedSpace || tree.length === 0) return;
+    const segs = pendingExpandPath.split('/');
+    if (segs.length <= 1) {
+      // File at root — nothing to expand.
+      setPendingExpandPath(null);
+      return;
+    }
+    const ancestors: string[] = [];
+    for (let i = 0; i < segs.length - 1; i++) {
+      ancestors.push(segs.slice(0, i + 1).join('/'));
+    }
+
+    const findNode = (nodes: TreeNode[], path: string): TreeNode | null => {
+      for (const n of nodes) {
+        if (n.path === path) return n;
+        if (n.children) {
+          const found = findNode(n.children, path);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
+
+    const toExpand: string[] = [];
+    let nextToLoad: string | null = null;
+    for (const anc of ancestors) {
+      const node = findNode(tree, anc);
+      if (!node) {
+        // Parent ancestor not loaded yet; stop and wait for next tree update.
+        break;
+      }
+      toExpand.push(anc);
+      if (!node.children || node.children.length === 0) {
+        // This ancestor's children are missing — kick off lazy-load and
+        // wait for the resulting tree update before walking further.
+        nextToLoad = anc;
+        break;
+      }
+    }
+
+    if (toExpand.length > 0) {
+      setExpandedPaths((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const p of toExpand) {
+          if (!next.has(p)) {
+            next.add(p);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+    if (nextToLoad) {
+      loadGitSubtree(selectedSpace, nextToLoad);
+    } else if (toExpand.length === ancestors.length) {
+      // Every ancestor is loaded and expanded — we're done.
+      setPendingExpandPath(null);
+    }
+  }, [pendingExpandPath, selectedSpace, tree]);
 
   // Splice lazy-loaded children into the existing tree at a given path.
   const spliceChildren = useCallback((path: string, children: TreeNode[]) => {
@@ -247,10 +357,14 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
       if (filePath && filePath !== selectedFilePath) {
         setSelectedFilePath(filePath);
         openFile(space, filePath);
+        setPendingExpandPath(filePath);
       }
       if (lineParam && Number.isFinite(Number(lineParam))) {
         const n = Number(lineParam);
         setSelectedLines({ start: n, end: n });
+        setShowEnrichments(true);
+      } else if (urlParams.get('comments') === '1') {
+        setShowEnrichments(true);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
@@ -297,6 +411,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
       } else {
         setSelectedFilePath(node.path);
         setSelectedLines(null);
+        setOverrideSourceUri(null);
         if (selectedSpace) {
           openFile(selectedSpace, node.path);
         }
@@ -340,7 +455,8 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
 
   return (
     <div className="flex h-full overflow-hidden bg-background">
-      {/* File Tree Sidebar */}
+      {/* File Tree Sidebar — toggled from the FileViewer header. */}
+      {showTree && (
       <div className="w-72 flex-shrink-0 border-r border-border flex flex-col overflow-hidden">
         {/* Space name + view-mode + expand/collapse */}
         <div className="px-3 py-1.5 flex items-center gap-2 border-b border-border">
@@ -351,14 +467,14 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             <button
               onClick={() => handleViewModeChange(ViewMode.Documents)}
               className={`p-1 rounded transition-colors ${viewMode === ViewMode.Documents ? 'bg-card text-foreground' : 'text-muted-foreground'}`}
-              title="Documents"
+              title="Render — show display names from file mapping"
             >
-              <BookOpen className="w-3 h-3" />
+              <Eye className="w-3 h-3" />
             </button>
             <button
               onClick={() => handleViewModeChange(ViewMode.Dev)}
               className={`p-1 rounded transition-colors ${viewMode === ViewMode.Dev ? 'bg-card text-foreground' : 'text-muted-foreground'}`}
-              title="Developer"
+              title="Raw — show real filenames"
             >
               <Code className="w-3 h-3" />
             </button>
@@ -369,6 +485,13 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             title={allExpanded ? 'Collapse all' : 'Expand all'}
           >
             {allExpanded ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
+          </button>
+          <button
+            onClick={() => setShowCreateFile(true)}
+            className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground flex-shrink-0"
+            title="Add file — create a new file in this repository"
+          >
+            <FilePlus size={14} />
           </button>
         </div>
 
@@ -403,6 +526,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             ))}
         </div>
       </div>
+      )}
 
       {/* Content Area — FileViewer manages its own overflow, so the wrapper
           only constrains width. The earlier `overflow-y-auto` here reserved
@@ -422,6 +546,9 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             commentsCount={commentsCount}
             hasUnsavedDraft={selectedFilePath ? draftPaths.has(selectedFilePath) : false}
             draftId={selectedFilePath ? draftsByPath.get(selectedFilePath) : undefined}
+            commentLines={commentLines}
+            showTree={showTree}
+            onToggleTree={() => setShowTree((v) => !v)}
             selectedLines={selectedLines}
             onLineClick={(line, opts) => {
               // Plain click anchors a single-line range; Shift+click extends
@@ -469,7 +596,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
           </div>
           <div className="flex-1 overflow-hidden">
             <EnrichmentPanel
-              sourceUri={buildSourceUri(selectedSpace, selectedFilePath)}
+              sourceUri={overrideSourceUri || buildSourceUri(selectedSpace, selectedFilePath)}
               selectedLines={selectedLines}
               spaceId={selectedSpace.id}
               currentFilePath={selectedFilePath}
@@ -477,6 +604,26 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
           </div>
         </div>
       )}
+
+      <CreateFileModal
+        isOpen={showCreateFile}
+        onClose={() => setShowCreateFile(false)}
+        space={selectedSpace}
+        onCreated={(newFilePath, draftId) => {
+          // Register the freshly-created draft optimistically so the
+          // FileViewer immediately knows there's a draft to fall back to —
+          // without this it would race the loadDrafts round-trip and show
+          // the "500 file does not exist in git" error.
+          setDraftsByPath((prev) => {
+            const next = new Map(prev);
+            next.set(newFilePath, draftId);
+            return next;
+          });
+          setSelectedFilePath(newFilePath);
+          setSelectedLines(null);
+          openFile(selectedSpace, newFilePath);
+        }}
+      />
     </div>
   );
 };

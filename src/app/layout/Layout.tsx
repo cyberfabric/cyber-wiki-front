@@ -15,6 +15,7 @@ import { Sidebar } from './Sidebar';
 import { Screen } from './Screen';
 import { Popup } from './Popup';
 import { Overlay } from './Overlay';
+import { PageHeaderProvider } from './PageHeader';
 
 export interface LayoutProps {
   children?: React.ReactNode;
@@ -28,37 +29,39 @@ export const Layout: React.FC<LayoutProps> = ({ children, navigate }) => {
   }, []);
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden">
-      {/* Top row: Menu + Header + Content + Sidebar */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Menu - full height on left */}
-        <Menu navigate={navigate} />
+    <PageHeaderProvider>
+      <div className="flex flex-col h-full w-full overflow-hidden">
+        {/* Top row: Menu + Header + Content + Sidebar */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Menu - full height on left */}
+          <Menu navigate={navigate} />
 
-        {/* Right side: Header + Content */}
-        <div className="flex flex-col flex-1 overflow-hidden">
-          {/* Header */}
-          <Header />
+          {/* Right side: Header + Content */}
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {/* Header */}
+            <Header />
 
-          {/* Main content area */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* Main content */}
-            <Screen>{children}</Screen>
+            {/* Main content area */}
+            <div className="flex flex-1 overflow-hidden">
+              {/* Main content */}
+              <Screen>{children}</Screen>
 
-            {/* Sidebar */}
-            <Sidebar />
+              {/* Sidebar */}
+              <Sidebar />
+            </div>
           </div>
         </div>
+
+        {/* Footer - full width */}
+        <Footer />
+
+        {/* Popups */}
+        <Popup />
+
+        {/* Overlay */}
+        <Overlay />
       </div>
-
-      {/* Footer - full width */}
-      <Footer />
-
-      {/* Popups */}
-      <Popup />
-
-      {/* Overlay */}
-      <Overlay />
-    </div>
+    </PageHeaderProvider>
   );
 };
 

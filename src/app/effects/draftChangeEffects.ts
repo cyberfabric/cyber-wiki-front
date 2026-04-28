@@ -8,6 +8,7 @@
 import { eventBus, apiRegistry } from '@cyberfabric/react';
 import { toLower } from 'lodash';
 import { DraftChangesApiService } from '@/app/api/DraftChangesApiService';
+import { extractErrorMessage } from '@/app/lib/errorMessage';
 
 export function registerDraftChangeEffects(): void {
   // Load drafts (optionally filtered by space)
@@ -16,12 +17,13 @@ export function registerDraftChangeEffects(): void {
       if (!apiRegistry.has(DraftChangesApiService)) return;
       const service = apiRegistry.getService(DraftChangesApiService);
       const drafts = spaceId
-        ? await service.listForSpace({ spaceId }).fetch()
-        : await service.listAll.fetch();
+        ? await service.listForSpace({ spaceId })
+        : await service.listAll();
       eventBus.emit('wiki/drafts/loaded', { spaceId, drafts: drafts ?? [] });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load draft changes';
-      eventBus.emit('wiki/draft/error', { error: message });
+      eventBus.emit('wiki/draft/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to load draft changes'),
+      });
     }
   });
 
@@ -34,8 +36,9 @@ export function registerDraftChangeEffects(): void {
         eventBus.emit('wiki/draft/got', { draft });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load draft change';
-      eventBus.emit('wiki/draft/error', { error: message });
+      eventBus.emit('wiki/draft/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to load draft change'),
+      });
     }
   });
 
@@ -58,8 +61,9 @@ export function registerDraftChangeEffects(): void {
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save draft change';
-      eventBus.emit('wiki/draft/error', { error: message });
+      eventBus.emit('wiki/draft/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to save draft change'),
+      });
     }
   });
 
@@ -73,7 +77,7 @@ export function registerDraftChangeEffects(): void {
       await service.discard(changeId);
       eventBus.emit('wiki/draft/discarded', { changeId });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to discard draft change';
+      const message = extractErrorMessage(error instanceof Error ? error : null, 'Failed to discard draft change');
       const lower = toLower(message);
       const is404 =
         lower.includes('404') ||
@@ -110,8 +114,9 @@ export function registerDraftChangeEffects(): void {
         });
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to commit draft changes';
-      eventBus.emit('wiki/draft/error', { error: message });
+      eventBus.emit('wiki/draft/error', {
+        error: extractErrorMessage(error instanceof Error ? error : null, 'Failed to commit draft changes'),
+      });
     }
   });
 }

@@ -11,6 +11,7 @@ import type {
   ViewMode,
   CreateSpaceRequest,
   UpdateSpaceRequest,
+  MyReviewPR,
 } from '@/app/api';
 
 declare module '@cyberfabric/react' {
@@ -61,5 +62,11 @@ declare module '@cyberfabric/react' {
     'wiki/file/error': { filePath: string; error: string };
     /** Navigate hash route */
     'wiki/navigate': { hash: string };
+    /** Load PRs (optionally filtered by author/reviewer) */
+    'wiki/my-reviews/load': { author?: string; reviewer?: string };
+    /** My reviews loaded */
+    'wiki/my-reviews/loaded': { pullRequests: MyReviewPR[]; currentGitUsernames: string[] };
+    /** My reviews load error */
+    'wiki/my-reviews/error': { error: string };
   }
 }

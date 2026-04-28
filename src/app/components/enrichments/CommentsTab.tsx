@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { trim } from 'lodash';
 import { ChevronDown, ChevronRight, FileText, MessageSquare, Send } from 'lucide-react';
 import { Comment } from '@/app/components/enrichments/Comment';
-import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
 import {
   createComment as createCommentAction,
   deleteComment as deleteCommentAction,

@@ -14,6 +14,7 @@ import type {
   UserSpacePreference,
   CreateSpaceRequest,
   UpdateSpaceRequest,
+  MyReviewsResponse,
 } from './wikiTypes';
 
 export class SpacesApiService extends BaseApiService {
@@ -134,5 +135,14 @@ export class SpacesApiService extends BaseApiService {
     return this.protocol(RestProtocol).get<{ content: string }>(
       `../../git-provider/v1/file/?${qs.toString()}`
     );
+  }
+
+  // PRs across all visible spaces with optional author/reviewer filters
+  async getPullRequests(opts: { author?: string; reviewer?: string } = {}): Promise<MyReviewsResponse> {
+    const params = new URLSearchParams();
+    if (opts.author) params.set('author', opts.author);
+    if (opts.reviewer) params.set('reviewer', opts.reviewer);
+    const qs = params.toString();
+    return this.protocol(RestProtocol).get<MyReviewsResponse>(`/my-reviews/${qs ? `?${qs}` : ''}`);
   }
 }

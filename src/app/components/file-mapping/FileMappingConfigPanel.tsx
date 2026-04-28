@@ -12,7 +12,7 @@
  */
 
 import { useCallback } from 'react';
-import { FileTree } from '@/app/components/FileTree';
+import { FileTree } from '@/app/components/file/FileTree';
 import {
   createFileMapping,
   updateFileMapping,

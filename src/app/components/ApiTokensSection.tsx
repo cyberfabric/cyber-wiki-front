@@ -6,7 +6,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { eventBus } from '@cyberfabric/react';
 import { Check, Copy, Plus, Trash2 } from 'lucide-react';
-import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
 import {
   createApiToken,
   deleteApiToken,

@@ -21,13 +21,15 @@ import {
   Minus,
   Square,
   Trash2,
+  X,
 } from 'lucide-react';
-import { ConfirmDialog } from '@/app/components/ui/confirm-dialog';
+import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
 import {
   commitDrafts,
   discardDraft,
   loadDrafts,
 } from '@/app/actions/draftChangeActions';
+import { PageTitle } from '@/app/layout';
 import {
   EditChangeType,
   Urls,
@@ -180,6 +182,33 @@ function ChangesPage({ navigate }: ChangesPageProps) {
     setSelected(allVisibleSelected ? new Set() : new Set(visibleIds));
   };
 
+  /** Selection state for one space group: 'none' / 'some' / 'all'. Drives
+   *  the tristate checkbox in the group header. */
+  const groupSelectionState = (group: SpaceGroup): 'none' | 'some' | 'all' => {
+    let selectedCount = 0;
+    for (const d of group.drafts) {
+      if (selected.has(d.id)) selectedCount++;
+    }
+    if (selectedCount === 0) return 'none';
+    if (selectedCount === group.drafts.length) return 'all';
+    return 'some';
+  };
+
+  /** Toggle every draft in a group: if any are unselected, select them all;
+   *  if all are already selected, deselect them all. */
+  const toggleGroupSelection = (group: SpaceGroup) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const state = groupSelectionState(group);
+      if (state === 'all') {
+        for (const d of group.drafts) next.delete(d.id);
+      } else {
+        for (const d of group.drafts) next.add(d.id);
+      }
+      return next;
+    });
+  };
+
   const handleOpen = (group: SpaceGroup, draft: DraftChangeListItem) => {
     const params = new URLSearchParams({
       space: group.spaceSlug,
@@ -190,7 +219,15 @@ function ChangesPage({ navigate }: ChangesPageProps) {
 
   const handleCommitSelected = () => {
     if (selected.size === 0) return;
+    // Backend rejects empty commit messages with a 500. Require non-empty
+    // here so the user gets clear inline feedback instead of a server crash.
+    const message = commitMessage.trim();
+    if (!message) {
+      setError('Commit message is required.');
+      return;
+    }
     setBusy(true);
+    setError(null);
     // Backend requires all change_ids in a single commit request to belong to
     // the same space — issue one request per space so a multi-repo selection
     // turns into one commit per repo.
@@ -201,7 +238,6 @@ function ChangesPage({ navigate }: ChangesPageProps) {
       list.push(d.id);
       idsBySpace.set(d.space_id, list);
     }
-    const message = commitMessage.trim() || undefined;
     for (const ids of idsBySpace.values()) {
       commitDrafts(ids, message);
     }
@@ -256,14 +292,9 @@ function ChangesPage({ navigate }: ChangesPageProps) {
         }}
         onCancel={() => setPendingDiscardSelected(false)}
       />
-      <div className="max-w-5xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Changes</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              All pending edits across the spaces you contribute to.
-            </p>
-          </div>
+      <PageTitle title="Changes" subtitle="All pending edits across the spaces you contribute to." />
+      <div className="max-w-7xl p-6 space-y-4">
+        <div className="flex items-center justify-end">
           <div className="flex items-center gap-2">
             <Filter size={14} className="text-muted-foreground" />
             <select
@@ -292,9 +323,20 @@ function ChangesPage({ navigate }: ChangesPageProps) {
         )}
 
         {error && !loading && (
-          <div className="flex items-center gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/10 text-destructive text-sm">
-            <AlertCircle size={16} />
-            {error}
+          <div className="flex items-start gap-2 p-3 rounded-md border border-destructive/30 bg-destructive/10 text-destructive text-sm">
+            <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+            <p className="flex-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+              {error}
+            </p>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="flex-shrink-0 p-0.5 rounded hover:bg-destructive/20 text-destructive/70 hover:text-destructive"
+              title="Dismiss"
+              aria-label="Dismiss error"
+            >
+              <X size={14} />
+            </button>
           </div>
         )}
 
@@ -333,16 +375,21 @@ function ChangesPage({ navigate }: ChangesPageProps) {
                   type="text"
                   value={commitMessage}
                   onChange={(e) => setCommitMessage(e.target.value)}
-                  placeholder="Commit message (optional)"
+                  placeholder="Commit message (required)"
                   className="px-2 py-1 text-xs border border-border rounded bg-background text-foreground w-56"
                   disabled={selected.size === 0 || busy}
+                  required
                 />
                 <button
                   type="button"
                   onClick={handleCommitSelected}
-                  disabled={selected.size === 0 || busy}
+                  disabled={selected.size === 0 || busy || !commitMessage.trim()}
                   className="flex items-center gap-1 px-3 py-1 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-40"
-                  title="Commit selected drafts"
+                  title={
+                    !commitMessage.trim()
+                      ? 'Enter a commit message first'
+                      : 'Commit selected drafts'
+                  }
                 >
                   <GitCommit size={12} />
                   Commit
@@ -363,29 +410,59 @@ function ChangesPage({ navigate }: ChangesPageProps) {
             <div className="space-y-2">
               {groups.map((group) => {
                 const isOpen = expandedGroups.has(group.spaceSlug);
+                const groupState = groupSelectionState(group);
+                const groupCheckboxIcon =
+                  groupState === 'all' ? (
+                    <Check size={14} className="text-green-600" />
+                  ) : groupState === 'some' ? (
+                    <Minus size={14} className="text-primary" />
+                  ) : (
+                    <Square size={14} className="text-muted-foreground" />
+                  );
                 return (
                   <div
                     key={group.spaceSlug}
                     className="border border-border rounded-lg bg-card overflow-hidden"
                   >
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.spaceSlug)}
-                      className="w-full flex items-center gap-2 px-4 py-2 hover:bg-accent/50 text-left"
-                    >
-                      {isOpen ? (
-                        <ChevronDown size={14} className="text-muted-foreground flex-shrink-0" />
-                      ) : (
-                        <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
-                      )}
-                      <FileText size={14} className="text-muted-foreground flex-shrink-0" />
-                      <span className="text-sm font-medium text-foreground truncate flex-1">
-                        {group.spaceSlug}
-                      </span>
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                        {group.drafts.length}
-                      </span>
-                    </button>
+                    {/* Group header row — split into a select-all checkbox
+                        and an expand/collapse toggle so the user can pick
+                        every draft in one repo without picking every draft
+                        on the page. */}
+                    <div className="flex items-center gap-2 px-4 py-2 hover:bg-accent/50">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleGroupSelection(group);
+                        }}
+                        title={
+                          groupState === 'all'
+                            ? `Deselect all in ${group.spaceSlug}`
+                            : `Select all in ${group.spaceSlug}`
+                        }
+                        className="p-0.5 rounded hover:bg-accent flex-shrink-0"
+                      >
+                        {groupCheckboxIcon}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(group.spaceSlug)}
+                        className="flex items-center gap-2 flex-1 text-left min-w-0"
+                      >
+                        {isOpen ? (
+                          <ChevronDown size={14} className="text-muted-foreground flex-shrink-0" />
+                        ) : (
+                          <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
+                        )}
+                        <FileText size={14} className="text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm font-medium text-foreground truncate flex-1">
+                          {group.spaceSlug}
+                        </span>
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                          {group.drafts.length}
+                        </span>
+                      </button>
+                    </div>
 
                     {isOpen && (
                       <ul className="divide-y divide-border border-t border-border">

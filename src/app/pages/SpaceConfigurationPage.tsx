@@ -8,11 +8,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { eventBus } from '@cyberfabric/react';
-import { Edit2, Trash2, Plus, Search, Star } from 'lucide-react';
+import { Edit2, Trash2, Plus, Search, Star, Folders, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { loadSpaces, toggleFavorite, deleteSpace } from '@/app/actions/wikiActions';
 import { type Space, type UserSpacePreference } from '@/app/api';
-import CreateSpaceModal from '@/app/components/CreateSpaceModal';
-import EditSpaceModal from '@/app/components/EditSpaceModal';
+import CreateSpaceModal from '@/app/components/space/CreateSpaceModal';
+import EditSpaceModal from '@/app/components/space/EditSpaceModal';
+import { FileMappingConfiguration } from '@/app/components/file-mapping/FileMappingConfiguration';
+import { PageTitle } from '@/app/layout';
 
 interface SpaceConfigurationPageProps {
   navigate: (view: string) => void;
@@ -25,6 +27,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingSpace, setEditingSpace] = useState<Space | null>(null);
+  const [mappingSpace, setMappingSpace] = useState<Space | null>(null);
 
   useEffect(() => {
     const sub = eventBus.on('wiki/spaces/loaded', (payload) => {
@@ -84,15 +87,10 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
-      <div className="border-b border-border px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Space Configuration</h1>
-            <p className="text-sm mt-1 text-muted-foreground">
-              Manage all spaces and their Git repository connections
-            </p>
-          </div>
+      <PageTitle title="Space Configuration" subtitle="Manage all spaces and their Git repository connections" />
+      {/* Toolbar */}
+      <div className="border-b border-border px-6 py-3">
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium bg-primary text-primary-foreground hover:opacity-90 transition-all"
@@ -102,7 +100,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
           </button>
         </div>
 
-        <div className="mt-4 relative">
+        <div className="mt-3 relative">
           <Search size={20} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
@@ -142,6 +140,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Git Provider</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Repository</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Branch</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Edit</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-muted-foreground">Actions</th>
                 </tr>
               </thead>
@@ -177,6 +176,24 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                       {space.git_default_branch || '-'}
                     </td>
                     <td className="px-4 py-3">
+                      {space.edit_enabled ? (
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400" title="Edit fork configured — editing is available">
+                          <CheckCircle2 size={14} />
+                          Ready
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingSpace(space)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 hover:underline"
+                          title="Edit fork not configured — click to set up"
+                        >
+                          <AlertTriangle size={14} />
+                          Setup needed
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => handleToggleFavorite(space)}
@@ -187,6 +204,13 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                             size={16}
                             className={favorites.some(f => f.space_slug === space.slug) ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground'}
                           />
+                        </button>
+                        <button
+                          onClick={() => setMappingSpace(space)}
+                          className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary transition-all"
+                          title="Configure file mapping (display names, filters, visibility)"
+                        >
+                          <Folders size={16} />
                         </button>
                         <button
                           onClick={() => setEditingSpace(space)}
@@ -223,6 +247,17 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
           onClose={() => setEditingSpace(null)}
           space={editingSpace}
         />
+      )}
+
+      {mappingSpace && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-7xl max-h-[90vh] overflow-hidden">
+            <FileMappingConfiguration
+              space={mappingSpace}
+              onClose={() => setMappingSpace(null)}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

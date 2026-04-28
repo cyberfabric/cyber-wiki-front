@@ -80,13 +80,13 @@ import {
   ContextMenuSubContent,
   ContextMenuSubTrigger,
   ContextMenuTrigger,
-} from '@/app/components/ui/context-menu';
+} from '@/app/components/primitives/ContextMenu';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/app/components/ui/dropdown-menu';
+} from '@/app/components/primitives/DropdownMenu';
 
 interface MdRendererProps {
   /** Initial content the editor mounts with (used once). */
