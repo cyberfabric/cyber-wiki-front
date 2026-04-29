@@ -12,6 +12,7 @@ import type {
   CreateSpaceRequest,
   UpdateSpaceRequest,
   MyReviewPR,
+  BlameLine,
 } from '@/app/api';
 
 declare module '@cyberfabric/react' {
@@ -60,6 +61,17 @@ declare module '@cyberfabric/react' {
     'wiki/file/loaded': { filePath: string; content: string };
     /** File content load error */
     'wiki/file/error': { filePath: string; error: string };
+    /** Request per-line blame for a file */
+    'wiki/blame/load': { space: Space; filePath: string };
+    /** Per-line blame loaded — `lines` is empty when provider has no
+     *  filesystem access and `supported` is false. */
+    'wiki/blame/loaded': {
+      filePath: string;
+      lines: BlameLine[];
+      supported: boolean;
+    };
+    /** Blame load error (provider rejected the request, file not in git, etc) */
+    'wiki/blame/error': { filePath: string; error: string };
     /** Navigate hash route */
     'wiki/navigate': { hash: string };
     /** Load PRs (optionally filtered by author/reviewer) */

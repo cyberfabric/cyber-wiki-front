@@ -3,18 +3,20 @@
  *
  * User profile with:
  * - User information
- * - Settings (cache toggle)
+ * - Settings (cache toggle, debug toggle)
  */
 
 import { useState, useEffect } from 'react';
 import { eventBus, useAppSelector, apiRegistry, type HeaderUser } from '@cyberfabric/react';
 import { AccountsApiService, type MeResponse } from '@/app/api';
 import {
+  Bug,
   Settings,
   CheckCircle2, User,
 } from 'lucide-react';
-import type { CacheSettings } from '@/app/api/wikiTypes';
+import type { CacheSettings, UserSettings } from '@/app/api/wikiTypes';
 import { loadCacheSettings, updateCacheSettings } from '@/app/actions/profileActions';
+import { loadUserSettings, updateUserSettings } from '@/app/actions/userSettingsActions';
 import { PageTitle } from '@/app/layout';
 
 // ─── ProfilePage ────────────────────────────────────────────────────────────
@@ -33,6 +35,10 @@ function ProfilePage({ navigate: _navigate }: ProfilePageProps) {
   // ── Cache settings state ──
   const [cacheSettings, setCacheSettings] = useState<CacheSettings | null>(null);
 
+  // ── User (UI) settings state ── persisted to localStorage via the
+  //  user/settings/* event domain. Houses developer toggles like Debug mode.
+  const [userSettings, setUserSettings] = useState<UserSettings | null>(null);
+
   // ── Messages ──
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -45,8 +51,17 @@ function ProfilePage({ navigate: _navigate }: ProfilePageProps) {
       setSuccess('Settings updated');
       setTimeout(() => setSuccess(null), 3000);
     });
+    const subUserLoaded = eventBus.on('user/settings/loaded', ({ settings }) => {
+      setUserSettings(settings);
+    });
+    const subUserUpdated = eventBus.on('user/settings/updated', ({ settings }) => {
+      setUserSettings(settings);
+      setSuccess('Settings updated');
+      setTimeout(() => setSuccess(null), 3000);
+    });
 
     loadCacheSettings();
+    loadUserSettings();
 
     apiRegistry.getService(AccountsApiService).me.fetch().then((me) => {
       if (me) setUserInfo(me);
@@ -55,6 +70,8 @@ function ProfilePage({ navigate: _navigate }: ProfilePageProps) {
     return () => {
       subCacheLoaded.unsubscribe();
       subCacheUpdated.unsubscribe();
+      subUserLoaded.unsubscribe();
+      subUserUpdated.unsubscribe();
     };
   }, []);
 
@@ -140,6 +157,36 @@ function ProfilePage({ navigate: _navigate }: ProfilePageProps) {
                     <span
                       className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform duration-200 ease-in-out ${
                         cacheSettings?.cache_enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </td>
+              </tr>
+              <tr className="border-t border-border">
+                <td className="px-4 py-3 text-sm font-medium text-foreground whitespace-nowrap">
+                  <Bug size={14} className="inline mr-2 text-muted-foreground" />
+                  Debug mode
+                </td>
+                <td className="px-4 py-3 text-sm text-muted-foreground">
+                  Reveal developer-only affordances: raw enrichment payload viewer (Debug tab in the file panel) and other future devtools.
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button
+                    onClick={() => {
+                      if (userSettings) {
+                        updateUserSettings({ debugMode: !userSettings.debugMode });
+                      }
+                    }}
+                    disabled={!userSettings}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 ${
+                      userSettings?.debugMode ? 'bg-primary' : 'bg-input'
+                    }`}
+                    role="switch"
+                    aria-checked={userSettings?.debugMode ?? false}
+                  >
+                    <span
+                      className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform duration-200 ease-in-out ${
+                        userSettings?.debugMode ? 'translate-x-5' : 'translate-x-0'
                       }`}
                     />
                   </button>

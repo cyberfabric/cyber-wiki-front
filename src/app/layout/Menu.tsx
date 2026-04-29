@@ -148,7 +148,32 @@ export const Menu: React.FC<MenuProps> = ({ children, navigate }) => {
         </SidebarMenu>
 
         {/* MY SPACES section */}
-        {!collapsed && (
+        {collapsed ? (
+          <SidebarMenu className="mt-4">
+            {spaces.map((space, idx) => {
+              const isActive =
+                currentView === Urls.Spaces && currentSpaceSlug === space.slug;
+              return (
+                <SidebarMenuItem key={space.id}>
+                  <SidebarMenuButton
+                    isActive={isActive}
+                    onClick={() => handleSelectSpace(space.slug)}
+                    title={space.name}
+                  >
+                    <SidebarMenuIcon>
+                      <span
+                        className={`flex size-5 shrink-0 items-center justify-center rounded text-[0.625rem] font-bold text-white ${getSpaceColor(idx)}`}
+                      >
+                        {space.name.charAt(0).toUpperCase()}
+                      </span>
+                    </SidebarMenuIcon>
+                    <span className="truncate">{space.name}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        ) : (
           <div className="mt-4">
             <button
               className="flex w-full items-center justify-between px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-mainMenu-foreground/60 hover:text-mainMenu-foreground/80"

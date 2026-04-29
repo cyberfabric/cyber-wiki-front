@@ -17,6 +17,7 @@ import {
   Code,
   GitCompare,
   GitCommit,
+  History,
   MessageSquare,
   Pencil,
   Save,
@@ -26,15 +27,21 @@ import {
 } from 'lucide-react';
 import FileRenderer from './FileRenderer';
 import { MdRenderer } from './MdRenderer';
+import BlameView from './BlameView';
 import { DraftDiffView } from '@/app/components/changes/DraftDiffView';
 import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
 import { commitDrafts, getDraft, saveDraft } from '@/app/actions/draftChangeActions';
+import { createPullRequest } from '@/app/actions/userBranchActions';
+import { loadBlame } from '@/app/actions/wikiActions';
 import {
   EditChangeType,
   FileType,
   FileViewMode,
+  PRStatus,
   detectFileType,
   getLanguageLabel,
+  type BlameLine,
+  type Space,
 } from '@/app/api/wikiTypes';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -43,6 +50,9 @@ interface FileViewerProps {
   spaceSlug: string;
   spaceId?: string;
   spaceName: string;
+  /** Full space object — needed for the Blame request which goes straight
+   *  to the git-provider API and needs git_provider/base_url/project_key/etc. */
+  space?: Space;
   filePath: string;
   onBack: () => void;
   /** Optional Comments / enrichments-panel toggle. */
@@ -64,6 +74,11 @@ interface FileViewerProps {
   /** ID of the pending draft (if any). When set, FileViewer fetches the
    *  draft content and shows it (instead of the original) in read mode. */
   draftId?: string;
+  /** True once SpaceViewPage has received its first wiki/drafts/loaded for
+   *  this space. While false, suppress the "file not found" error so a
+   *  freshly-created (draft-only) file deep-link doesn't flash an error
+   *  before draftId/draftContent arrive. */
+  draftsLoaded?: boolean;
   /** Lines (1-based) that have at least one comment anchored to them.
    *  Drives the gutter marker so the user can spot commented lines at a
    *  glance without scrolling through the comments panel. */
@@ -81,6 +96,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
   spaceSlug,
   spaceId,
   spaceName,
+  space,
   filePath,
   onBack,
   showComments,
@@ -92,6 +108,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
   commentsCount,
   hasUnsavedDraft,
   draftId,
+  draftsLoaded,
   commentLines,
   showTree,
   onToggleTree,
@@ -127,6 +144,12 @@ const FileViewer: React.FC<FileViewerProps> = ({
   const [commitOpen, setCommitOpen] = useState(false);
   const [commitMessage, setCommitMessage] = useState('');
 
+  // Blame state — populated lazily when the user toggles the Blame view.
+  const [blame, setBlame] = useState<BlameLine[]>([]);
+  const [blameLoading, setBlameLoading] = useState(false);
+  const [blameError, setBlameError] = useState<string | null>(null);
+  const [blameSupported, setBlameSupported] = useState(true);
+
   const fileName = filePath.split('/').pop() || filePath;
   const breadcrumb = filePath.split('/').slice(0, -1).join(' / ');
   const languageLabel = useMemo(() => getLanguageLabel(fileName), [fileName]);
@@ -138,6 +161,11 @@ const FileViewer: React.FC<FileViewerProps> = ({
   const hasUsefulPreview = isMarkdown;
   const isPreviewable = hasUsefulPreview;
   const isDirty = isEditMode && content !== null && draft !== content;
+  // Hide the "Resource not found" banner while the drafts list is still being
+  // resolved for this space, or while the known draft body is mid-flight —
+  // both windows are transient races, not real errors.
+  const errorSuppressed =
+    !!error && (draftsLoaded === false || (!!draftId && draftContent === null));
 
   // Lines that differ between the on-disk file and the unsaved draft —
   // computed via the longest common subsequence so a single insertion near
@@ -248,7 +276,48 @@ const FileViewer: React.FC<FileViewerProps> = ({
     setSavedToast(false);
     setShowDraft(true);
     setDraftContent(null);
+    // Each file owns its own blame; clear so the previous file's gutter
+    // doesn't briefly show next to a different file's source while the new
+    // request is in flight.
+    setBlame([]);
+    setBlameError(null);
+    setBlameLoading(false);
+    setBlameSupported(true);
   }, [filePath]);
+
+  // Subscribe to blame results — kept independent of the on-demand fetch
+  // so cached responses (effect-level cache) and re-fetches both flow
+  // through the same path.
+  useEffect(() => {
+    const subLoaded = eventBus.on('wiki/blame/loaded', (payload) => {
+      if (payload.filePath !== filePathRef.current) return;
+      setBlame(payload.lines);
+      setBlameSupported(payload.supported);
+      setBlameLoading(false);
+      setBlameError(null);
+    });
+    const subError = eventBus.on('wiki/blame/error', (payload) => {
+      if (payload.filePath !== filePathRef.current) return;
+      setBlameError(payload.error);
+      setBlameLoading(false);
+    });
+    return () => {
+      subLoaded.unsubscribe();
+      subError.unsubscribe();
+    };
+  }, []);
+
+  // Lazy-load blame when entering Blame view. We don't preload because the
+  // blame call is heavier than the file fetch (full git history walk) and
+  // most file opens never enter Blame.
+  useEffect(() => {
+    if (viewMode !== FileViewMode.Blame) return;
+    if (!space) return;
+    if (blame.length > 0 || blameLoading) return;
+    setBlameLoading(true);
+    setBlameError(null);
+    loadBlame(space, filePath);
+  }, [viewMode, space, filePath, blame.length, blameLoading]);
 
   // Fallback for newly-created files that don't exist on disk yet. The
   // backend's file-content endpoint 500s because there's nothing to read,
@@ -311,6 +380,57 @@ const FileViewer: React.FC<FileViewerProps> = ({
       errorSub.unsubscribe();
     };
   }, []);
+
+  // Inline post-commit status — when the user commits from this view (vs the
+  // ChangesPage), they need to see whether the PR was auto-opened, attached
+  // to an existing PR, or skipped. Banner clears itself after a short delay
+  // (or on next interaction) so it doesn't permanently consume the toolbar.
+  const [postCommitToast, setPostCommitToast] = useState<
+    | {
+        status: PRStatus;
+        url: string | null;
+        error: string | null;
+        spaceId: string;
+        retrying: boolean;
+      }
+    | null
+  >(null);
+  useEffect(() => {
+    const subs = [
+      eventBus.on('wiki/draft/committed', ({ pr, prError, prStatus, spaceId: committedSpaceId }) => {
+        setPostCommitToast({
+          status: prStatus ?? (pr ? PRStatus.Existing : PRStatus.NotAttempted),
+          url: pr?.prUrl ?? null,
+          error: prError ?? null,
+          spaceId: committedSpaceId,
+          retrying: false,
+        });
+      }),
+      eventBus.on('wiki/pr/created', ({ result }) => {
+        setPostCommitToast((prev) =>
+          prev && prev.retrying
+            ? { ...prev, status: PRStatus.Created, url: result.pr_url, error: null, retrying: false }
+            : prev,
+        );
+      }),
+      eventBus.on('wiki/branch/error', ({ error: msg }) => {
+        setPostCommitToast((prev) =>
+          prev && prev.retrying
+            ? { ...prev, status: PRStatus.Failed, error: msg, retrying: false }
+            : prev,
+        );
+      }),
+    ];
+    return () => subs.forEach((s) => s.unsubscribe());
+  }, []);
+  // Auto-dismiss success states after 8s; failures stick until the user
+  // clicks them away so the reason isn't lost in a flash.
+  useEffect(() => {
+    if (!postCommitToast) return undefined;
+    if (postCommitToast.status === PRStatus.Failed) return undefined;
+    const t = setTimeout(() => setPostCommitToast(null), 8000);
+    return () => clearTimeout(t);
+  }, [postCommitToast]);
 
   const handleStartEdit = useCallback(() => {
     if (content === null) return;
@@ -561,11 +681,12 @@ const FileViewer: React.FC<FileViewerProps> = ({
           )
         )}
 
-        {/* View mode toggle (Preview / Source / Diff) — Preview is hidden for
-            plain-text files; Diff appears only when there's an unsaved draft
-            that actually differs from the on-disk version. In markdown edit,
-            Source = raw textarea and Preview = WYSIWYG (Milkdown). */}
-        {(hasUsefulPreview || (hasUnsavedDraft && draftContent !== null)) && !isEditMode && (
+        {/* View mode toggle (Preview / Source / Diff / Blame) — Preview is
+            hidden for plain-text files; Diff appears only when there's an
+            unsaved draft that actually differs from the on-disk version;
+            Blame is shown whenever we have a Space (any committed file).
+            In markdown edit, Source = raw textarea, Preview = WYSIWYG. */}
+        {(hasUsefulPreview || (hasUnsavedDraft && draftContent !== null) || !!space) && !isEditMode && (
           <div className="flex items-center border border-border rounded overflow-hidden flex-shrink-0">
             {isPreviewable && (
               <button
@@ -590,6 +711,15 @@ const FileViewer: React.FC<FileViewerProps> = ({
                 title="Diff — see exactly what changed"
               >
                 <GitCompare size={14} />
+              </button>
+            )}
+            {space && (
+              <button
+                onClick={() => setViewMode(FileViewMode.Blame)}
+                className={`p-1.5 transition-colors ${viewMode === FileViewMode.Blame ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
+                title="Blame — show who last modified each line"
+              >
+                <History size={14} />
               </button>
             )}
           </div>
@@ -639,6 +769,22 @@ const FileViewer: React.FC<FileViewerProps> = ({
         )}
       </div>
 
+      {/* Post-commit banner — sits between the header and the content so the
+          user immediately sees whether the PR was opened/attached/failed. */}
+      {postCommitToast && (
+        <PostCommitBanner
+          status={postCommitToast.status}
+          url={postCommitToast.url}
+          error={postCommitToast.error}
+          retrying={postCommitToast.retrying}
+          onRetry={() => {
+            setPostCommitToast((prev) => (prev ? { ...prev, retrying: true } : prev));
+            createPullRequest({ spaceId: postCommitToast.spaceId });
+          }}
+          onDismiss={() => setPostCommitToast(null)}
+        />
+      )}
+
       {/* Content */}
       {loading && (
         <div className="flex-1 flex items-center justify-center">
@@ -646,7 +792,12 @@ const FileViewer: React.FC<FileViewerProps> = ({
         </div>
       )}
 
-      {error && (
+      {/* Suppress the file-fetch error while drafts are still being discovered
+          (deep-link to a created-as-draft file 500s on git but recovers once
+          the drafts list arrives) or while the known draft body is still in
+          flight. The fallback effect will clear the error once draftContent
+          loads; until then, render a spinner instead of a misleading error. */}
+      {error && !errorSuppressed && (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2 text-destructive">
             <AlertCircle size={16} />
@@ -654,8 +805,15 @@ const FileViewer: React.FC<FileViewerProps> = ({
           </div>
         </div>
       )}
+      {error && errorSuppressed && (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+        </div>
+      )}
 
-      {!loading && !error && content !== null && !isEditMode && viewMode !== FileViewMode.Diff && (
+      {!loading && !error && content !== null && !isEditMode
+        && viewMode !== FileViewMode.Diff
+        && viewMode !== FileViewMode.Blame && (
         <div className="flex-1 overflow-auto">
           <FileRenderer
             content={
@@ -676,6 +834,18 @@ const FileViewer: React.FC<FileViewerProps> = ({
           <DraftDiffView
             original={content}
             modified={draftContent ?? content}
+          />
+        </div>
+      )}
+
+      {!loading && !error && content !== null && !isEditMode && viewMode === FileViewMode.Blame && (
+        <div className="flex-1 overflow-auto">
+          <BlameView
+            content={content}
+            blame={blame}
+            loading={blameLoading}
+            error={blameError}
+            unsupported={!blameSupported}
           />
         </div>
       )}
@@ -726,5 +896,84 @@ const FileViewer: React.FC<FileViewerProps> = ({
     </div>
   );
 };
+
+// =============================================================================
+// PostCommitBanner — shows what happened to the PR alongside the commit.
+// =============================================================================
+
+interface PostCommitBannerProps {
+  status: PRStatus;
+  url: string | null;
+  error: string | null;
+  retrying: boolean;
+  onRetry: () => void;
+  onDismiss: () => void;
+}
+
+function PostCommitBanner({ status, url, error, retrying, onRetry, onDismiss }: PostCommitBannerProps) {
+  const isOk = status === PRStatus.Created || status === PRStatus.Existing;
+  const isFail = status === PRStatus.Failed;
+  const headline =
+    status === PRStatus.Created
+      ? 'Pull request opened.'
+      : status === PRStatus.Existing
+        ? 'New commit pushed to existing PR.'
+        : status === PRStatus.Failed
+          ? 'PR could not be opened automatically.'
+          : 'PR not opened — edit fork or token missing.';
+  return (
+    <div
+      className={`flex items-center gap-2 px-3 py-1.5 text-xs border-b ${
+        isOk
+          ? 'border-blue-500/30 bg-blue-500/10 text-foreground'
+          : isFail
+            ? 'border-yellow-500/30 bg-yellow-500/10 text-foreground'
+            : 'border-border bg-muted text-muted-foreground'
+      }`}
+    >
+      {isOk ? (
+        <GitCommit size={12} className="text-blue-600 dark:text-blue-400 flex-shrink-0" />
+      ) : (
+        <AlertCircle size={12} className={`flex-shrink-0 ${isFail ? 'text-yellow-600 dark:text-yellow-400' : 'text-muted-foreground'}`} />
+      )}
+      <span className="font-medium">{headline}</span>
+      {url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:no-underline text-blue-600 dark:text-blue-400 truncate"
+        >
+          {url}
+        </a>
+      )}
+      {error && !url && (
+        <span className="text-yellow-700 dark:text-yellow-300 truncate" title={error}>
+          {error}
+        </span>
+      )}
+      {isFail && (
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-yellow-500/40 bg-yellow-500/10 text-yellow-800 dark:text-yellow-200 hover:bg-yellow-500/20 disabled:opacity-50 flex-shrink-0"
+        >
+          <GitCommit size={11} />
+          {retrying ? 'Retrying…' : 'Retry PR'}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={onDismiss}
+        className={`${isFail ? '' : 'ml-auto'} p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent flex-shrink-0`}
+        title="Dismiss"
+        aria-label="Dismiss"
+      >
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
 
 export default FileViewer;

@@ -5,7 +5,7 @@
  * Ported from doclab utils/performanceTracker.ts.
  */
 
-interface PerformanceMetric {
+export interface PerformanceMetric {
   operation: string;
   duration: number;
   dataSize?: number;
@@ -89,6 +89,10 @@ export function getMetrics(): PerformanceMetric[] {
 
 export function getSlowOperations(threshold = SLOW_THRESHOLD_MS): PerformanceMetric[] {
   return metrics.filter((m) => m.duration > threshold);
+}
+
+export function pushMetric(metric: PerformanceMetric): void {
+  metrics.push(metric);
 }
 
 export function clearMetrics(): void {

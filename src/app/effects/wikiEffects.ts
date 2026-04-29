@@ -18,9 +18,9 @@ export function registerWikiEffects(): void {
       const spacesService = apiRegistry.getService(SpacesApiService);
 
       const [favorites, recent, all] = await Promise.all([
-        spacesService.listFavorites.fetch(),
-        spacesService.listRecent.fetch(),
-        spacesService.listSpaces.fetch(),
+        spacesService.listFavorites.fetch({ staleTime: 0 }),
+        spacesService.listRecent.fetch({ staleTime: 0 }),
+        spacesService.listSpaces.fetch({ staleTime: 0 }),
       ]);
 
       eventBus.emit('wiki/spaces/loaded', {
@@ -167,6 +167,50 @@ export function registerWikiEffects(): void {
   const fileContentCache = new Map<string, string>();
   const fileCacheKey = (space: { slug: string; git_default_branch: string }, filePath: string) =>
     `${space.slug}:${space.git_default_branch || 'main'}:${filePath}`;
+
+  // Per-line blame. Cached separately from content because they don't share
+  // a server-side path (different endpoints) and the user may toggle blame
+  // on/off many times while editing.
+  const blameCache = new Map<string, { lines: import('@/app/api').BlameLine[]; supported: boolean }>();
+  const blameCacheKey = (
+    space: { slug: string; git_default_branch: string },
+    filePath: string,
+  ) => `${space.slug}:${space.git_default_branch || 'main'}:${filePath}`;
+
+  eventBus.on('wiki/blame/load', async ({ space, filePath }) => {
+    const key = blameCacheKey(space, filePath);
+    const cached = blameCache.get(key);
+    if (cached) {
+      eventBus.emit('wiki/blame/loaded', { filePath, ...cached });
+      return;
+    }
+    try {
+      const spacesService = apiRegistry.getService(SpacesApiService);
+      const result = await spacesService.getFileBlame({
+        provider: space.git_provider || '',
+        baseUrl: space.git_base_url || '',
+        projectKey: space.git_project_key || '',
+        repoSlug: space.git_repository_id || '',
+        filePath,
+        branch: space.git_default_branch || 'main',
+        spaceId: space.id,
+      });
+      const payload = {
+        lines: result.lines ?? [],
+        supported: !!result.supported,
+      };
+      blameCache.set(key, payload);
+      eventBus.emit('wiki/blame/loaded', { filePath, ...payload });
+    } catch (error) {
+      eventBus.emit('wiki/blame/error', {
+        filePath,
+        error: extractErrorMessage(
+          error instanceof Error ? error : null,
+          'Failed to load file blame',
+        ),
+      });
+    }
+  });
 
   eventBus.on('wiki/file/open', async ({ space, filePath }) => {
     const key = fileCacheKey(space, filePath);

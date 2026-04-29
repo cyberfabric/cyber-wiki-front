@@ -14,6 +14,9 @@ export enum Urls {
   SpaceConfiguration = 'space-configuration',
   Profile = 'profile',
   Tokens = 'tokens',
+  /** Diagnostics page — git ops + performance metrics. Gated behind the
+   *  Profile → Debug-mode toggle (hidden from regular users). */
+  Logs = 'logs',
   Configuration = 'configuration',
   Comments = 'comments',
   Changes = 'changes',
@@ -118,6 +121,8 @@ export enum FileViewMode {
   Visual = 'visual',
   /** Unified-diff render of the on-disk content against the unsaved draft. */
   Diff = 'diff',
+  /** Per-line blame view (author + commit sha + date in a left gutter). */
+  Blame = 'blame',
 }
 
 // =============================================================================
@@ -539,6 +544,7 @@ export enum EnrichmentTab {
   PRs = 'prs',
   Local = 'local',
   Changes = 'changes',
+  Debug = 'debug',
 }
 
 // =============================================================================
@@ -630,6 +636,59 @@ export type CommitDraftChangesRequest = {
   commit_message?: string;
 };
 
+export type GitOpsLogEntry = {
+  /** Unix timestamp (seconds, float). */
+  ts: number;
+  /** Short verb identifier ("commit", "pr.create.auto", etc). */
+  kind: string;
+  /** "ok" | "error" | "skip". */
+  status: string;
+  message: string;
+  space_slug: string;
+  branch_name: string;
+  /** Loose key/value bag — commit_sha, pr_id, conflict_files, etc. */
+  payload: Record<string, unknown>;
+};
+
+export type GitOpsLogResponse = {
+  entries: GitOpsLogEntry[];
+};
+
+export type BlameLine = {
+  /** 1-based line number in the current file. */
+  line_no: number;
+  /** Text of the line (no trailing newline). */
+  content: string;
+  /** Long sha of the commit that introduced this version of the line. */
+  commit_sha: string;
+  author_name: string;
+  author_email: string;
+  /** ISO-8601 timestamp. */
+  author_date: string;
+  /** Commit message subject (single line). */
+  summary: string;
+};
+
+export type FileBlameResponse = {
+  lines: BlameLine[];
+  /** False when the underlying provider does not implement blame (remote-only
+   *  providers without a worktree). UI should hide the Blame toggle in that
+   *  case rather than spamming errors. */
+  supported: boolean;
+  provider: string;
+};
+
+export enum PRStatus {
+  /** PR newly opened by this commit. */
+  Created = 'created',
+  /** Branch already had a PR — push updates it in place. */
+  Existing = 'existing',
+  /** Auto-PR attempt failed (`pr_error` carries reason). */
+  Failed = 'failed',
+  /** Prerequisites missing — no edit fork / no service token. */
+  NotAttempted = 'not_attempted',
+}
+
 export type CommitDraftChangesResult = {
   success: boolean;
   message?: string;
@@ -638,6 +697,16 @@ export type CommitDraftChangesResult = {
   files_committed: number;
   space_id: string;
   space_slug: string;
+  /** Set when the backend auto-opened a PR after the first commit on a new
+   *  task (or when the branch already had one). Null if no PR was created or
+   *  the auto-create attempt failed; `pr_error` then carries the reason. */
+  pr?: { pr_id: string; pr_url: string } | null;
+  /** Best-effort reason the auto-PR step was skipped, surfaced so the UI can
+   *  show "commit succeeded but PR could not be opened — retry?" rather than
+   *  silently dropping the failure. */
+  pr_error?: string | null;
+  /** Explicit PR-stage outcome — see `PRStatus`. */
+  pr_status?: PRStatus;
 };
 
 // =============================================================================
@@ -730,6 +799,10 @@ export type UserSettings = {
   lastOpenedPath: Record<string, string>;
   /** UI theme. */
   theme: ThemeMode;
+  /** Reveal developer-only affordances (Debug enrichment tab, raw payload
+   *  viewers, future devtools). Off by default for regular users; the toggle
+   *  lives next to the cache toggle in Profile. */
+  debugMode: boolean;
 };
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -737,6 +810,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
   enrichmentsPinned: false,
   lastOpenedPath: {},
   theme: ThemeMode.System,
+  debugMode: false,
 };
 
 /**

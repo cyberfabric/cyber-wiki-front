@@ -7,10 +7,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppSelector, useTheme, eventBus, type HeaderState } from '@cyberfabric/react';
-import { User, LogOut, Sun, Moon, Monitor, Palette, Settings, KeyRound, AlertTriangle } from 'lucide-react';
+import { User, LogOut, Sun, Moon, Monitor, Palette, Settings, KeyRound, AlertTriangle, ScrollText } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/app/components/primitives/Avatar';
 import { Skeleton } from '@/app/components/primitives/Skeleton';
 import { logoutAction } from '@/app/actions/bootstrapActions';
+import { useDebugMode } from '@/app/lib/useDebugMode';
 import { Urls } from '@/app/api';
 import { usePageHeader } from './PageHeader';
 
@@ -27,6 +28,9 @@ export const Header: React.FC<HeaderProps> = ({ children }) => {
   const loading = headerState?.loading ?? false;
 
   const [tokenFailures, setTokenFailures] = useState<{ id: string; serviceType: string; name: string; message: string }[]>([]);
+  // Drives the optional Logs entry in the user menu — only visible when the
+  // user has flipped Debug mode on in Profile → Settings.
+  const debugMode = useDebugMode();
 
   useEffect(() => {
     const subHealth = eventBus.on('profile/tokens/health', ({ failures }) => {
@@ -202,6 +206,15 @@ export const Header: React.FC<HeaderProps> = ({ children }) => {
                   <KeyRound size={16} />
                   Tokens
                 </button>
+                {debugMode && (
+                  <button
+                    onClick={() => { window.location.hash = Urls.Logs; setMenuOpen(false); }}
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm text-popover-foreground hover:bg-accent transition-colors"
+                  >
+                    <ScrollText size={16} />
+                    Logs
+                  </button>
+                )}
                 <button
                   onClick={() => { window.location.hash = Urls.SpaceConfiguration; setMenuOpen(false); }}
                   className="flex items-center gap-2 w-full px-3 py-2 text-sm text-popover-foreground hover:bg-accent transition-colors"

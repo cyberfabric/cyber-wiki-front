@@ -58,6 +58,8 @@ export function registerDraftChangeEffects(): void {
         eventBus.emit('wiki/draft/saved', {
           changeId: result.id,
           created: result.created,
+          spaceId: payload.spaceId,
+          filePath: payload.filePath,
         });
       }
     } catch (error) {
@@ -107,6 +109,11 @@ export function registerDraftChangeEffects(): void {
           filesCommitted: result.files_committed,
           spaceId: result.space_id,
           spaceSlug: result.space_slug,
+          pr: result.pr
+            ? { prId: result.pr.pr_id, prUrl: result.pr.pr_url }
+            : null,
+          prError: result.pr_error ?? null,
+          prStatus: result.pr_status,
         });
       } else {
         eventBus.emit('wiki/draft/error', {

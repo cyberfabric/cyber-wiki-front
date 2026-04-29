@@ -515,10 +515,20 @@ function CommitGroup({
     <div>
       <div className="flex items-center gap-2 px-4 py-2 border-b border-border bg-muted">
         <GitCommit size={13} className="text-violet-500 flex-shrink-0" />
-        <span className="text-xs font-medium flex-1 truncate text-foreground">
-          {workspaceName}
-        </span>
-        <span className="text-xs text-muted-foreground">
+        <div className="flex-1 min-w-0 flex items-baseline gap-2">
+          <span className="text-xs font-medium truncate text-foreground">
+            {workspaceName}
+          </span>
+          {rep.task_name && rep.branch_name && rep.branch_name !== workspaceName && (
+            <span
+              className="text-[10px] font-mono text-muted-foreground truncate"
+              title={rep.branch_name}
+            >
+              {rep.branch_name}
+            </span>
+          )}
+        </div>
+        <span className="text-xs text-muted-foreground flex-shrink-0">
           {files.length} file{files.length !== 1 ? 's' : ''}
         </span>
         {spaceId && rep.pr_url && (

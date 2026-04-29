@@ -20,6 +20,7 @@ const SpaceViewPage = React.lazy(() => import('@/app/pages/SpaceViewPage'));
 const SpaceConfigurationPage = React.lazy(() => import('@/app/pages/SpaceConfigurationPage'));
 const ProfilePage = React.lazy(() => import('@/app/pages/ProfilePage'));
 const TokensPage = React.lazy(() => import('@/app/pages/TokensPage'));
+const LogsPage = React.lazy(() => import('@/app/pages/LogsPage'));
 const CommentsPage = React.lazy(() => import('@/app/pages/CommentsPage'));
 const ChangesPage = React.lazy(() => import('@/app/pages/ChangesPage'));
 const PRsPage = React.lazy(() => import('@/app/pages/PRsPage'));
@@ -81,6 +82,7 @@ function App() {
         {activeView === Urls.SpaceConfiguration && <SpaceConfigurationPage navigate={navigate} />}
         {activeView === Urls.Profile && <ProfilePage navigate={navigate} />}
         {activeView === Urls.Tokens && <TokensPage navigate={navigate} />}
+        {activeView === Urls.Logs && <LogsPage navigate={navigate} />}
         {activeView === Urls.Comments && <CommentsPage navigate={navigate} />}
         {activeView === Urls.Changes && <ChangesPage navigate={navigate} />}
         {activeView === Urls.PRs && <PRsPage navigate={navigate} />}

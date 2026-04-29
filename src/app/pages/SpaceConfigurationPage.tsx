@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { eventBus } from '@cyberfabric/react';
-import { Edit2, Trash2, Plus, Search, Star, Folders, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Edit2, Trash2, Plus, Search, Star, Folders, CheckCircle2, AlertTriangle, FolderOpen } from 'lucide-react';
 import { loadSpaces, toggleFavorite, deleteSpace } from '@/app/actions/wikiActions';
 import { type Space, type UserSpacePreference } from '@/app/api';
 import CreateSpaceModal from '@/app/components/space/CreateSpaceModal';
@@ -141,6 +141,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Repository</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Branch</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Edit</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase text-muted-foreground">Local fork</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase text-muted-foreground">Actions</th>
                 </tr>
               </thead>
@@ -191,6 +192,26 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                           <AlertTriangle size={14} />
                           Setup needed
                         </button>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 max-w-[160px]">
+                      {space.edit_fork_local_path ? (
+                        <span
+                          className="inline-flex items-center gap-1 text-xs font-mono text-foreground w-full"
+                          title={space.edit_fork_local_path}
+                        >
+                          <FolderOpen size={14} className="flex-shrink-0 text-green-600 dark:text-green-400" />
+                          <span className="truncate">
+                            …/{space.edit_fork_local_path.split('/').slice(-2).join('/')}
+                          </span>
+                        </span>
+                      ) : (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title="No local fork path configured — fork is cloned to the backend cache on first use"
+                        >
+                          —
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3">

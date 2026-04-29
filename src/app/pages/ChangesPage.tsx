@@ -6,19 +6,26 @@
  * edits without forcing the user to open every file individually.
  */
 
-import { useEffect, useMemo, useState } from 'react';
-import { eventBus } from '@cyberfabric/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { eventBus, apiRegistry } from '@cyberfabric/react';
 import {
   AlertCircle,
   Check,
   ChevronDown,
   ChevronRight,
   Edit3,
+  ExternalLink,
   FileText,
   Filter,
+  GitBranch,
   GitCommit,
+  GitPullRequest,
+  Loader2,
+  MoreHorizontal,
   Plus,
   Minus,
+  RotateCw,
+  Undo2,
   Square,
   Trash2,
   X,
@@ -29,11 +36,15 @@ import {
   discardDraft,
   loadDrafts,
 } from '@/app/actions/draftChangeActions';
+import { createPullRequest, unstageBranch } from '@/app/actions/userBranchActions';
 import { PageTitle } from '@/app/layout';
 import {
   EditChangeType,
+  GitOpsLogApiService,
+  PRStatus,
   Urls,
   type DraftChangeListItem,
+  type GitOpsLogEntry,
 } from '@/app/api';
 
 interface ChangesPageProps {
@@ -90,6 +101,21 @@ function ChangesPage({ navigate }: ChangesPageProps) {
   const [busy, setBusy] = useState(false);
   const [pendingDiscard, setPendingDiscard] = useState<DraftChangeListItem | null>(null);
   const [pendingDiscardSelected, setPendingDiscardSelected] = useState(false);
+  /** Outcome of the auto-PR step that runs alongside every commit. Drives a
+   *  single banner with the right copy per state — `created` / `existing` /
+   *  `failed` / `not_attempted`. Picking the right wording from the
+   *  (pr, pr_error) tuple alone is ambiguous, so the backend tells us. */
+  const [lastCommitPr, setLastCommitPr] = useState<
+    | {
+        status: PRStatus;
+        url: string | null;
+        branch: string;
+        error: string | null;
+        spaceId: string;
+        retrying: boolean;
+      }
+    | null
+  >(null);
 
   useEffect(() => {
     setLoading(true);
@@ -110,10 +136,34 @@ function ChangesPage({ navigate }: ChangesPageProps) {
     };
     const mutationSubs = [
       eventBus.on('wiki/draft/discarded', refresh),
-      eventBus.on('wiki/draft/committed', () => {
+      eventBus.on('wiki/draft/committed', ({ pr, prError, prStatus, branchName, spaceId }) => {
         setSelected(new Set());
         setCommitMessage('');
+        setLastCommitPr({
+          status: prStatus ?? (pr ? PRStatus.Existing : PRStatus.NotAttempted),
+          url: pr?.prUrl ?? null,
+          branch: branchName,
+          error: prError ?? null,
+          spaceId,
+          retrying: false,
+        });
         refresh();
+      }),
+      // Retry-PR success — flip the banner from Failed → Created with the new URL.
+      eventBus.on('wiki/pr/created', ({ result }) => {
+        setLastCommitPr((prev) =>
+          prev && prev.retrying
+            ? { ...prev, status: PRStatus.Created, url: result.pr_url, error: null, retrying: false }
+            : prev,
+        );
+      }),
+      // Retry-PR failure — keep the banner on Failed, refresh the error text.
+      eventBus.on('wiki/branch/error', ({ error: msg }) => {
+        setLastCommitPr((prev) =>
+          prev && prev.retrying
+            ? { ...prev, status: PRStatus.Failed, error: msg, retrying: false }
+            : prev,
+        );
       }),
     ];
     loadDrafts();
@@ -340,6 +390,21 @@ function ChangesPage({ navigate }: ChangesPageProps) {
           </div>
         )}
 
+        {lastCommitPr && (
+          <CommitPrBanner
+            status={lastCommitPr.status}
+            url={lastCommitPr.url}
+            branch={lastCommitPr.branch}
+            error={lastCommitPr.error}
+            retrying={lastCommitPr.retrying}
+            onRetry={() => {
+              setLastCommitPr((prev) => (prev ? { ...prev, retrying: true } : prev));
+              createPullRequest({ spaceId: lastCommitPr.spaceId });
+            }}
+            onDismiss={() => setLastCommitPr(null)}
+          />
+        )}
+
         {!loading && !error && total === 0 && (
           <div className="text-center py-12 text-muted-foreground">
             <Edit3 size={48} className="mx-auto mb-3 opacity-30" />
@@ -534,7 +599,486 @@ function ChangesPage({ navigate }: ChangesPageProps) {
             </div>
           </>
         )}
+        <RecentCommitsPanel />
       </div>
+    </div>
+  );
+}
+
+// =============================================================================
+// RecentCommitsPanel — past commits from git-ops-log with PR status
+// =============================================================================
+
+interface CommitEntry {
+  ts: number;
+  message: string;
+  spaceSlug: string;
+  spaceId: string | null;
+  branch: string;
+  sha: string | null;
+  filesCommitted: number;
+  status: string;
+  pr: { url: string; status: 'created' | 'existing' | 'failed' | 'none' } | null;
+  prError: string | null;
+}
+
+function buildCommitEntries(entries: GitOpsLogEntry[]): CommitEntry[] {
+  const commits: CommitEntry[] = [];
+  const prByBranch = new Map<string, GitOpsLogEntry>();
+
+  for (const e of entries) {
+    if (e.kind === 'pr.create.auto') {
+      const key = `${e.space_slug}/${e.branch_name}`;
+      if (!prByBranch.has(key)) prByBranch.set(key, e);
+    }
+  }
+
+  for (const e of entries) {
+    if (e.kind !== 'commit') continue;
+    const branchKey = `${e.space_slug}/${e.branch_name}`;
+    const prEntry = prByBranch.get(branchKey);
+    let pr: CommitEntry['pr'] = null;
+    let prError: string | null = null;
+
+    if (prEntry) {
+      if (prEntry.status === 'ok') {
+        const prUrl = (prEntry.payload?.pr_url as string) || '';
+        pr = {
+          url: prUrl,
+          status: prEntry.message?.toLowerCase().includes('existing') ? 'existing' : 'created',
+        };
+      } else if (prEntry.status === 'error') {
+        pr = { url: '', status: 'failed' };
+        prError = prEntry.message || 'PR creation failed';
+      }
+    }
+
+    commits.push({
+      ts: e.ts,
+      message: e.message,
+      spaceSlug: e.space_slug,
+      spaceId: (e.payload?.space_id as string) || null,
+      branch: e.branch_name,
+      sha: (e.payload?.commit_sha as string) || null,
+      filesCommitted: (e.payload?.files_committed as number) || 0,
+      status: e.status,
+      pr,
+      prError,
+    });
+  }
+
+  return commits;
+}
+
+function RecentCommitsPanel() {
+  const [entries, setEntries] = useState<CommitEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [spaces, setSpaces] = useState<{ slug: string; id: string }[]>([]);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    try {
+      const service = apiRegistry.getService(GitOpsLogApiService);
+      const result = await service.list({ limit: 100 });
+      setEntries(buildCommitEntries(result.entries ?? []));
+    } catch {
+      // silently ignore — this is supplementary info
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  // Subscribe to spaces so we can resolve slug → id for actions.
+  // Also emit a load so the subscription fires even when spaces were
+  // loaded before this component mounted.
+  useEffect(() => {
+    const sub = eventBus.on('wiki/spaces/loaded', ({ all }) => {
+      setSpaces((all || []).map((s: { slug: string; id: string }) => ({ slug: s.slug, id: s.id })));
+    });
+    eventBus.emit('wiki/spaces/load');
+    return () => { sub.unsubscribe(); };
+  }, []);
+
+  // Also refresh after a commit is made or branch unstaged
+  useEffect(() => {
+    const subs = [
+      eventBus.on('wiki/draft/committed', () => void reload()),
+      eventBus.on('wiki/branch/unstaged', () => void reload()),
+      eventBus.on('wiki/branch/discarded', () => void reload()),
+    ];
+    return () => { subs.forEach((s) => s.unsubscribe()); };
+  }, [reload]);
+
+  const resolveSpaceId = useCallback(
+    (entry: CommitEntry): string | null => {
+      if (entry.spaceId) return entry.spaceId;
+      const match = spaces.find((s) => s.slug === entry.spaceSlug);
+      return match?.id ?? null;
+    },
+    [spaces],
+  );
+
+  if (loading && entries.length === 0) {
+    return (
+      <div className="border border-border rounded-lg overflow-hidden">
+        <div className="flex items-center gap-2 px-4 py-3 bg-muted border-b border-border">
+          <GitCommit size={14} className="text-muted-foreground" />
+          <h3 className="text-sm font-semibold text-foreground">Recent Commits</h3>
+        </div>
+        <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+          <Loader2 size={16} className="inline animate-spin mr-2" />
+          Loading…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="border border-border rounded-lg">
+      <div className="flex items-center gap-2 px-4 py-3 bg-muted border-b border-border rounded-t-lg">
+        <GitCommit size={14} className="text-muted-foreground" />
+        <h3 className="text-sm font-semibold text-foreground">Recent Commits</h3>
+        <span className="text-xs text-muted-foreground">{entries.length}</span>
+        <button
+          type="button"
+          onClick={() => void reload()}
+          className="ml-auto p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Reload"
+        >
+          <RotateCw size={12} />
+        </button>
+      </div>
+
+      {entries.length === 0 ? (
+        <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+          <GitCommit size={32} className="mx-auto mb-2 opacity-30" />
+          <p>No commits yet. Commit some changes to see them here.</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-border">
+          {entries.map((c, i) => (
+            <CommitRow
+              key={`${c.ts}-${i}`}
+              entry={c}
+              resolveSpaceId={resolveSpaceId}
+            />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CommitRow({
+  entry: c,
+  resolveSpaceId,
+}: {
+  entry: CommitEntry;
+  resolveSpaceId: (entry: CommitEntry) => string | null;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close menu on click outside
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [menuOpen]);
+
+  // Listen for success/error events to clear busy state
+  useEffect(() => {
+    const subs = [
+      eventBus.on('wiki/branch/unstaged', () => { setBusy(false); setActionError(null); }),
+      eventBus.on('wiki/branch/discarded', () => { setBusy(false); setActionError(null); }),
+      eventBus.on('wiki/pr/created', () => { setBusy(false); setActionError(null); }),
+      eventBus.on('wiki/branch/error', ({ error }) => { setBusy(false); setActionError(error); }),
+    ];
+    return () => { subs.forEach((s) => s.unsubscribe()); };
+  }, []);
+
+  const hasPr = c.pr?.status === 'created' || c.pr?.status === 'existing';
+  const canRevert = c.status === 'ok' && !hasPr;
+  const canRetryPr = c.pr?.status === 'failed';
+  const spaceId = resolveSpaceId(c);
+
+  const handleRevert = () => {
+    setMenuOpen(false);
+    if (!spaceId) {
+      setActionError(`Cannot resolve space ID for "${c.spaceSlug}"`);
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    unstageBranch(spaceId);
+  };
+
+  const handleRetryPr = () => {
+    setMenuOpen(false);
+    if (!spaceId) {
+      setActionError(`Cannot resolve space ID for "${c.spaceSlug}"`);
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    createPullRequest({ spaceId });
+  };
+
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-start gap-3">
+        <div className="flex-shrink-0 mt-0.5">
+          {c.status === 'ok' ? (
+            <Check size={14} className="text-green-600" />
+          ) : (
+            <X size={14} className="text-destructive" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-medium text-foreground truncate">
+              {c.message || 'Commit'}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+            <span>{new Date(c.ts * 1000).toLocaleString()}</span>
+            <span className="flex items-center gap-1">
+              <FileText size={10} />
+              {c.spaceSlug}
+            </span>
+            <span className="flex items-center gap-1">
+              <GitBranch size={10} />
+              {c.branch}
+            </span>
+            {c.sha && (
+              <code className="font-mono text-[10px] px-1 py-0.5 rounded bg-muted">
+                {c.sha.slice(0, 7)}
+              </code>
+            )}
+            {c.filesCommitted > 0 && (
+              <span>{c.filesCommitted} file{c.filesCommitted === 1 ? '' : 's'}</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <CommitPrBadge pr={c.pr} prError={c.prError} />
+          {busy && <Loader2 size={14} className="animate-spin text-muted-foreground" />}
+          {(canRevert || canRetryPr) && !busy && (
+            <div className="relative" ref={menuRef}>
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="p-1 rounded text-muted-foreground hover:bg-accent hover:text-foreground"
+                title="More actions"
+              >
+                <MoreHorizontal size={14} />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 bottom-full mb-1 z-20 min-w-[160px] rounded-md border border-border bg-popover shadow-md py-1">
+                  {canRevert && (
+                    <button
+                      type="button"
+                      onClick={handleRevert}
+                      disabled={!spaceId || busy}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground hover:bg-accent disabled:opacity-40"
+                      title={!spaceId ? `Cannot resolve space "${c.spaceSlug}"` : 'Revert committed changes back to drafts'}
+                    >
+                      <Undo2 size={12} />
+                      Revert commit
+                    </button>
+                  )}
+                  {canRetryPr && (
+                    <button
+                      type="button"
+                      onClick={handleRetryPr}
+                      disabled={!spaceId || busy}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground hover:bg-accent disabled:opacity-40"
+                      title={!spaceId ? `Cannot resolve space "${c.spaceSlug}"` : 'Retry pull request creation'}
+                    >
+                      <GitPullRequest size={12} />
+                      Retry PR
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+      {actionError && (
+        <div className="mt-1.5 ml-[26px] flex items-start gap-1.5 text-xs text-destructive">
+          <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
+          <span className="break-words">{actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} className="flex-shrink-0 p-0.5 rounded hover:bg-destructive/20">
+            <X size={10} />
+          </button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function CommitPrBadge({ pr, prError }: { pr: CommitEntry['pr']; prError: string | null }) {
+  if (!pr) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground" title="No PR">
+        <GitPullRequest size={10} />
+        No PR
+      </span>
+    );
+  }
+
+  if (pr.status === 'failed') {
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-yellow-500/10 text-yellow-700 dark:text-yellow-400"
+        title={prError || 'PR creation failed'}
+      >
+        <AlertCircle size={10} />
+        PR failed
+      </span>
+    );
+  }
+
+  const label = pr.status === 'created' ? 'PR created' : 'PR exists';
+  const classes = pr.status === 'created'
+    ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+    : 'bg-blue-500/10 text-blue-700 dark:text-blue-400';
+
+  return pr.url ? (
+    <a
+      href={pr.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${classes} hover:underline`}
+      title={pr.url}
+    >
+      <GitPullRequest size={10} />
+      {label}
+      <ExternalLink size={8} />
+    </a>
+  ) : (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${classes}`}>
+      <GitPullRequest size={10} />
+      {label}
+    </span>
+  );
+}
+
+// =============================================================================
+// CommitPrBanner — single banner with copy tailored to each pr_status outcome
+// =============================================================================
+
+interface CommitPrBannerProps {
+  status: PRStatus;
+  url: string | null;
+  branch: string;
+  error: string | null;
+  retrying: boolean;
+  onRetry: () => void;
+  onDismiss: () => void;
+}
+
+function CommitPrBanner({ status, url, branch, error, retrying, onRetry, onDismiss }: CommitPrBannerProps) {
+  // Banner color + copy is fully driven by status. Keeping the branching here
+  // (rather than five almost-identical JSX blocks) makes future copy tweaks a
+  // one-line change and avoids the silent-failure mode the old two-banner
+  // shape had (`failed` with a stale `pr` prop showed the green banner).
+  const palette =
+    status === PRStatus.Created || status === PRStatus.Existing
+      ? {
+          border: 'border-blue-500/30',
+          bg: 'bg-blue-500/10',
+          icon: <GitCommit size={16} className="flex-shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />,
+          link: 'text-blue-600 dark:text-blue-400',
+          dismissBg: 'hover:bg-blue-500/20',
+        }
+      : status === PRStatus.Failed
+        ? {
+            border: 'border-yellow-500/30',
+            bg: 'bg-yellow-500/10',
+            icon: <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-yellow-600 dark:text-yellow-400" />,
+            link: 'text-yellow-700 dark:text-yellow-300',
+            dismissBg: 'hover:bg-yellow-500/20',
+          }
+        : {
+            border: 'border-muted-foreground/30',
+            bg: 'bg-muted',
+            icon: <AlertCircle size={16} className="flex-shrink-0 mt-0.5 text-muted-foreground" />,
+            link: 'text-muted-foreground',
+            dismissBg: 'hover:bg-accent',
+          };
+
+  const headline =
+    status === PRStatus.Created
+      ? `Pull request opened for ${branch}.`
+      : status === PRStatus.Existing
+        ? `New commit pushed to existing pull request for ${branch}.`
+        : status === PRStatus.Failed
+          ? 'Commit succeeded, but the PR could not be opened automatically.'
+          : 'Commit succeeded. No PR was opened.';
+
+  const subline =
+    status === PRStatus.Failed
+      ? error
+      : status === PRStatus.NotAttempted
+        ? 'Edit fork or git provider token is missing for this space — set them up to auto-open PRs on commit.'
+        : null;
+
+  return (
+    <div
+      className={`flex items-start gap-2 p-3 rounded-md border ${palette.border} ${palette.bg} text-foreground text-sm`}
+    >
+      {palette.icon}
+      <div className="flex-1 leading-relaxed">
+        <p className="font-medium">{headline}</p>
+        {url && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`${palette.link} underline hover:no-underline break-all`}
+          >
+            {url}
+          </a>
+        )}
+        {subline && (
+          <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">
+            {subline}
+          </p>
+        )}
+        {status === PRStatus.Failed && (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retrying}
+            className="mt-2 inline-flex items-center gap-1 px-2 py-1 text-xs rounded border border-yellow-500/40 bg-yellow-500/10 text-yellow-800 dark:text-yellow-200 hover:bg-yellow-500/20 disabled:opacity-50"
+          >
+            <GitCommit size={12} />
+            {retrying ? 'Retrying…' : 'Retry PR'}
+          </button>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        className={`flex-shrink-0 p-0.5 rounded ${palette.dismissBg} text-muted-foreground hover:text-foreground`}
+        title="Dismiss"
+        aria-label="Dismiss"
+      >
+        <X size={14} />
+      </button>
     </div>
   );
 }

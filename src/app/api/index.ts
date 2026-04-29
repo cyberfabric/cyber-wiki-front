@@ -13,6 +13,7 @@ export { UserBranchApiService } from './UserBranchApiService';
 export { FileMappingApiService } from './FileMappingApiService';
 export { ApiTokensApiService } from './ApiTokensApiService';
 export { ServiceTokensApiService } from './ServiceTokensApiService';
+export { GitOpsLogApiService } from './GitOpsLogApiService';
 export {
   Urls,
   SpaceVisibility,
@@ -63,6 +64,11 @@ export {
   type SaveDraftChangeResponse,
   type CommitDraftChangesRequest,
   type CommitDraftChangesResult,
+  PRStatus,
+  type BlameLine,
+  type FileBlameResponse,
+  type GitOpsLogEntry,
+  type GitOpsLogResponse,
   UserTaskStatus,
   type UserTaskInfo,
   type WorkspaceResponse,

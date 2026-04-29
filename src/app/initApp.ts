@@ -17,7 +17,9 @@ import { FileMappingApiService } from '@/app/api/FileMappingApiService';
 import { ApiTokensApiService } from '@/app/api/ApiTokensApiService';
 import { ServiceTokensApiService } from '@/app/api/ServiceTokensApiService';
 import { UserSettingsApiService } from '@/app/api/UserSettingsApiService';
+import { GitOpsLogApiService } from '@/app/api/GitOpsLogApiService';
 import { CsrfPlugin } from '@/app/api/CsrfPlugin';
+import { PerformancePlugin } from '@/app/api/PerformancePlugin';
 import { AuthPlugin } from '@/app/api/AuthPlugin';
 import '@/app/events/bootstrapEvents';
 import '@/app/events/wikiEvents';
@@ -48,6 +50,7 @@ apiRegistry.register(FileMappingApiService);
 apiRegistry.register(ApiTokensApiService);
 apiRegistry.register(ServiceTokensApiService);
 apiRegistry.register(UserSettingsApiService);
+apiRegistry.register(GitOpsLogApiService);
 
 // Initialize API services
 apiRegistry.initialize({});
@@ -55,6 +58,7 @@ apiRegistry.initialize({});
 // Register auth plugins globally
 apiRegistry.plugins.add(RestProtocol, new AuthPlugin());
 apiRegistry.plugins.add(RestProtocol, new CsrfPlugin());
+apiRegistry.plugins.add(RestProtocol, new PerformancePlugin());
 
 // Create HAI3 app instance
 const app = createHAI3App();

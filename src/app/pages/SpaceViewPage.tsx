@@ -92,6 +92,10 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
   const [overrideSourceUri, setOverrideSourceUri] = useState<string | null>(null);
   /** Maps file_path → draft_id for the current space (pending drafts). */
   const [draftsByPath, setDraftsByPath] = useState<Map<string, string>>(new Map());
+  /** False until the first wiki/drafts/loaded event for the current space.
+   *  Lets FileViewer suppress "Resource not found" while we still don't know
+   *  whether the deep-linked file is a created-as-draft path. */
+  const [draftsLoaded, setDraftsLoaded] = useState(false);
   /** Convenience set of paths with pending drafts (drives tree dot + header badge). */
   const draftPaths = useMemo(() => new Set(draftsByPath.keys()), [draftsByPath]);
 
@@ -205,22 +209,52 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
   useEffect(() => {
     if (!selectedSpace) {
       setDraftsByPath(new Map());
+      setDraftsLoaded(false);
       return undefined;
     }
+    setDraftsLoaded(false);
     const sub = eventBus.on('wiki/drafts/loaded', ({ drafts: list, spaceId }) => {
       // Effect echoes back the requested space; ignore unrelated payloads.
       if (spaceId && spaceId !== selectedSpace.id) return;
       setDraftsByPath(new Map(list.map((d) => [d.file_path, d.id])));
+      setDraftsLoaded(true);
     });
+    // If the drafts listing fails (auth, network, backend down), don't strand
+    // the FileViewer on a forever-spinner: flip `draftsLoaded` so the real
+    // file-fetch error (or actual content) gets shown.
+    const errSub = eventBus.on('wiki/draft/error', () => {
+      setDraftsLoaded(true);
+    });
+    // Safety net for the case where the listing never completes (request
+    // hangs, route never returns). 5s is generous enough for a healthy API
+    // and short enough that the user isn't staring at a blank spinner.
+    const timeoutId = setTimeout(() => setDraftsLoaded(true), 5000);
     const refresh = () => loadDrafts(selectedSpace.id);
+    // Optimistic Commit-button: insert the freshly-saved draft into the
+    // path → id map immediately so FileViewer's Commit/diff UI lights up
+    // without waiting for the follow-up loadDrafts round-trip. The refresh
+    // below still reconciles the map with the authoritative server state.
+    const savedSub = eventBus.on('wiki/draft/saved', ({ changeId, spaceId, filePath }) => {
+      if (spaceId === selectedSpace.id) {
+        setDraftsByPath((prev) => {
+          if (prev.get(filePath) === changeId) return prev;
+          const next = new Map(prev);
+          next.set(filePath, changeId);
+          return next;
+        });
+      }
+      refresh();
+    });
     const refreshSubs = [
-      eventBus.on('wiki/draft/saved', refresh),
+      savedSub,
       eventBus.on('wiki/draft/discarded', refresh),
       eventBus.on('wiki/draft/committed', refresh),
     ];
     refresh();
     return () => {
+      clearTimeout(timeoutId);
       sub.unsubscribe();
+      errSub.unsubscribe();
       refreshSubs.forEach((s) => s.unsubscribe());
     };
   }, [selectedSpace]);
@@ -537,6 +571,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             spaceSlug={selectedSpace.slug}
             spaceId={selectedSpace.id}
             spaceName={selectedSpace.name}
+            space={selectedSpace}
             filePath={selectedFilePath}
             onBack={() => setSelectedFilePath(null)}
             showComments={showEnrichments}
@@ -546,6 +581,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             commentsCount={commentsCount}
             hasUnsavedDraft={selectedFilePath ? draftPaths.has(selectedFilePath) : false}
             draftId={selectedFilePath ? draftsByPath.get(selectedFilePath) : undefined}
+            draftsLoaded={draftsLoaded}
             commentLines={commentLines}
             showTree={showTree}
             onToggleTree={() => setShowTree((v) => !v)}
@@ -599,6 +635,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
               sourceUri={overrideSourceUri || buildSourceUri(selectedSpace, selectedFilePath)}
               selectedLines={selectedLines}
               spaceId={selectedSpace.id}
+              spaceSlug={selectedSpace.slug}
               currentFilePath={selectedFilePath}
             />
           </div>
