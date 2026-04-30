@@ -182,6 +182,7 @@ function PRsPage({ navigate }: PRsPageProps) {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              aria-label={t('prs.searchPlaceholder')}
               placeholder={t('prs.searchPlaceholder')}
               className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
@@ -193,6 +194,7 @@ function PRsPage({ navigate }: PRsPageProps) {
               value={authorFilter}
               onChange={(e) => setAuthorFilter(e.target.value)}
               className="px-2 py-1 text-sm rounded border border-border bg-background text-foreground"
+              aria-label={t('prs.filterAuthor')}
               title={t('prs.filterAuthor')}
             >
               <option value="all">{t('prs.authorAll')}</option>
@@ -206,6 +208,7 @@ function PRsPage({ navigate }: PRsPageProps) {
               value={reviewerFilter}
               onChange={(e) => setReviewerFilter(e.target.value)}
               className="px-2 py-1 text-sm rounded border border-border bg-background text-foreground"
+              aria-label={t('prs.filterReviewer')}
               title={t('prs.filterReviewer')}
             >
               <option value="me">{t('prs.reviewerMine')}</option>

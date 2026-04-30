@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { eventBus, useTranslation } from '@cyberfabric/react';
 import { Check, Loader2, RotateCw, Trash2, X } from 'lucide-react';
-import { type GitOpsLogEntry } from '@/app/api';
+import { type GitOpsLogEntry, GitOpsLogStatus } from '@/app/api';
 import { clearGitOpsLog, loadGitOpsLog } from '@/app/actions/gitOpsLogActions';
 import { formatDateTime, formatTime } from '@/app/lib/formatDate';
 
@@ -122,8 +122,8 @@ function GitOpsLogRow({ entry }: { entry: GitOpsLogEntry }) {
   const { t } = useTranslation();
   const tsLabel = formatTime(entry.ts);
   const tsTitle = formatDateTime(entry.ts, '');
-  const isError = entry.status === 'error';
-  const isOk = entry.status === 'ok';
+  const isError = entry.status === GitOpsLogStatus.Error;
+  const isOk = entry.status === GitOpsLogStatus.Ok;
   const payloadJson = JSON.stringify(entry.payload ?? {}, null, 2);
   const hasPayload = payloadJson !== '{}';
 
@@ -178,8 +178,8 @@ function GitOpsLogRow({ entry }: { entry: GitOpsLogEntry }) {
   );
 }
 
-function StatusIcon({ status }: { status: string }) {
-  if (status === 'ok') return <Check size={11} className="text-green-600 flex-shrink-0" />;
-  if (status === 'error') return <X size={11} className="text-destructive flex-shrink-0" />;
+function StatusIcon({ status }: { status: GitOpsLogStatus }) {
+  if (status === GitOpsLogStatus.Ok) return <Check size={11} className="text-green-600 flex-shrink-0" />;
+  if (status === GitOpsLogStatus.Error) return <X size={11} className="text-destructive flex-shrink-0" />;
   return <span className="w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" />;
 }

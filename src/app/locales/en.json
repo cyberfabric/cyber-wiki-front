@@ -309,6 +309,7 @@
     "create": "Create Space",
     "createFirst": "Create Your First Space",
     "searchPlaceholder": "Search spaces…",
+    "deleteConfirmTitle": "Delete Space",
     "deleteConfirm": "Are you sure you want to delete this space? This action cannot be undone.",
     "emptyNoMatch": "No spaces found matching your search",
     "emptyNone": "No spaces configured yet",

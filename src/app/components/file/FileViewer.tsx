@@ -514,17 +514,6 @@ const FileViewer: React.FC<FileViewerProps> = ({
     });
   }, [content, draft, filePath, isDirty, spaceId]);
 
-  const handleCopy = useCallback(async () => {
-    if (!content) return;
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Clipboard API not available
-    }
-  }, [content]);
-
   /**
    * Content the user is actually looking at right now — the stat bar must
    * mirror this, not the original. Picks `draft` in non-markdown edit
@@ -537,6 +526,17 @@ const FileViewer: React.FC<FileViewerProps> = ({
     if (draftContent !== null && showDraft) return draftContent;
     return content ?? '';
   }, [content, draft, draftContent, isEditMode, isMarkdown, showDraft]);
+
+  const handleCopy = useCallback(async () => {
+    if (!displayedContent) return;
+    try {
+      await navigator.clipboard.writeText(displayedContent);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API not available
+    }
+  }, [displayedContent]);
 
   const lines = useMemo(() => displayedContent.split('\n'), [displayedContent]);
 
@@ -776,7 +776,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
         {!isEditMode && (
           <button
             onClick={handleCopy}
-            disabled={!content}
+            disabled={!displayedContent}
             className="p-1.5 rounded hover:bg-background transition-colors text-muted-foreground disabled:opacity-30 flex-shrink-0"
             title={t('fileViewer.copyTitle')}
           >

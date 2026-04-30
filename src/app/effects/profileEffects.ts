@@ -139,7 +139,7 @@ export function registerProfileEffects(): void {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : t('errors.failedToUpdateCacheSettings');
-      eventBus.emit('profile/tokens/error', { error: message });
+      eventBus.emit('profile/cache/error', { error: message });
     }
   });
 

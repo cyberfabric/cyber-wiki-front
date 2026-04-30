@@ -60,9 +60,10 @@ export function ApiTokensSection() {
     setCreating(true);
     setError(null);
     const days = trim(expiresInDays) ? Number(trim(expiresInDays)) : undefined;
+    const validDays = days != null && Number.isInteger(days) && days > 0 ? days : undefined;
     createApiToken({
       name: trim(name),
-      ...(days != null && Number.isFinite(days) ? { expires_in_days: days } : {}),
+      ...(validDays != null ? { expires_in_days: validDays } : {}),
     });
   };
 

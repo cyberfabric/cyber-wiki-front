@@ -25,7 +25,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
-import { type GitOpsLogEntry } from '@/app/api';
+import { type GitOpsLogEntry, GitOpsLogStatus } from '@/app/api';
 
 enum CommitPrStatus {
   Created = 'created',
@@ -46,7 +46,7 @@ interface CommitEntry {
   branch: string;
   sha: string | null;
   filesCommitted: number;
-  status: string;
+  status: GitOpsLogStatus;
   pr: { url: string; status: CommitPrStatus } | null;
   prError: string | null;
 }
@@ -70,7 +70,7 @@ function buildCommitEntries(entries: GitOpsLogEntry[]): CommitEntry[] {
     let prError: string | null = null;
 
     if (prEntry) {
-      if (prEntry.status === 'ok') {
+      if (prEntry.status === GitOpsLogStatus.Ok) {
         const prUrl = (prEntry.payload?.pr_url as string) || '';
         pr = {
           url: prUrl,
@@ -78,7 +78,7 @@ function buildCommitEntries(entries: GitOpsLogEntry[]): CommitEntry[] {
             ? CommitPrStatus.Existing
             : CommitPrStatus.Created,
         };
-      } else if (prEntry.status === 'error') {
+      } else if (prEntry.status === GitOpsLogStatus.Error) {
         pr = { url: '', status: CommitPrStatus.Failed };
         prError = prEntry.message || 'PR creation failed';
       }
@@ -246,7 +246,7 @@ function CommitRow({
   }, []);
 
   const hasPr = c.pr?.status === CommitPrStatus.Created || c.pr?.status === CommitPrStatus.Existing;
-  const canRevert = c.status === 'ok' && !hasPr;
+  const canRevert = c.status === GitOpsLogStatus.Ok && !hasPr;
   const canRetryPr = c.pr?.status === CommitPrStatus.Failed;
   const spaceId = resolveSpaceId(c);
 
@@ -276,7 +276,7 @@ function CommitRow({
     <li className="px-4 py-3">
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
-          {c.status === 'ok' ? (
+          {c.status === GitOpsLogStatus.Ok ? (
             <Check size={14} className="text-green-600" />
           ) : (
             <X size={14} className="text-destructive" />

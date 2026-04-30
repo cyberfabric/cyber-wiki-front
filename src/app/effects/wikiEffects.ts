@@ -83,6 +83,7 @@ export function registerWikiEffects(): void {
         describeError(error instanceof Error ? error : null, t('errors.failedToLoadSpaces')),
         { dev: true },
       );
+      eventBus.emit('wiki/spaces/loaded', { favorites: [], recent: [], all: [] });
     }
   });
 

@@ -219,7 +219,7 @@ function PerfMetricsPanel() {
                       {m.duration.toFixed(0)}
                     </td>
                     <td className="px-2 py-1 text-right text-muted-foreground font-mono">
-                      {m.dataSize ? formatBytes(m.dataSize) : t('common.missing')}
+                      {m.dataSize != null ? formatBytes(m.dataSize) : t('common.missing')}
                     </td>
                   </tr>
                 );

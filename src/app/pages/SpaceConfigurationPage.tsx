@@ -15,6 +15,7 @@ import { type Space, type UserSpacePreference } from '@/app/api';
 import CreateSpaceModal from '@/app/components/space/CreateSpaceModal';
 import EditSpaceModal from '@/app/components/space/EditSpaceModal';
 import { FileMappingConfiguration } from '@/app/components/file-mapping/FileMappingConfiguration';
+import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
 import { Modal, ModalSize } from '@/app/components/primitives/Modal';
 import { PageTitle } from '@/app/layout';
 
@@ -31,6 +32,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingSpace, setEditingSpace] = useState<Space | null>(null);
   const [mappingSpace, setMappingSpace] = useState<Space | null>(null);
+  const [pendingDeleteSlug, setPendingDeleteSlug] = useState<string | null>(null);
 
   useEffect(() => {
     const sub = eventBus.on('wiki/spaces/loaded', (payload) => {
@@ -48,10 +50,12 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
   };
 
   const handleDeleteSpace = (slug: string) => {
-    if (!window.confirm(t('spaceConfig.deleteConfirm'))) {
-      return;
-    }
-    deleteSpace(slug);
+    setPendingDeleteSlug(slug);
+  };
+
+  const confirmDelete = () => {
+    if (pendingDeleteSlug) deleteSpace(pendingDeleteSlug);
+    setPendingDeleteSlug(null);
   };
 
   const q = lowerCase(searchQuery);
@@ -91,6 +95,15 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
 
   return (
     <div className="h-full flex flex-col bg-background">
+      <ConfirmDialog
+        open={pendingDeleteSlug !== null}
+        title={t('spaceConfig.deleteConfirmTitle')}
+        message={t('spaceConfig.deleteConfirm')}
+        confirmLabel={t('common.delete')}
+        danger
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDeleteSlug(null)}
+      />
       <PageTitle title={t('spaceConfig.title')} subtitle={t('spaceConfig.subtitle')} />
       <div className="border-b border-border px-6 py-3">
         <div className="flex items-center justify-end">
@@ -209,7 +222,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                           >
                             <FolderOpen size={14} className="flex-shrink-0 text-green-600 dark:text-green-400" />
                             <span className="truncate">
-                              …/{space.edit_fork_local_path.split('/').slice(-2).join('/')}
+                              …/{space.edit_fork_local_path.split(/[\\/]/).filter(Boolean).slice(-2).join('/')}
                             </span>
                           </span>
                         ) : (
@@ -226,6 +239,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                           <button
                             onClick={() => handleToggleFavorite(space)}
                             className="p-2 rounded-lg hover:bg-muted transition-all"
+                            aria-label={isFavorite ? t('spaceConfig.actions.removeFromFavorites') : t('spaceConfig.actions.addToFavorites')}
                             title={isFavorite ? t('spaceConfig.actions.removeFromFavorites') : t('spaceConfig.actions.addToFavorites')}
                           >
                             <Star
@@ -236,6 +250,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                           <button
                             onClick={() => setMappingSpace(space)}
                             className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary transition-all"
+                            aria-label={t('spaceConfig.actions.configureMapping')}
                             title={t('spaceConfig.actions.configureMapping')}
                           >
                             <Folders size={16} />
@@ -243,6 +258,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                           <button
                             onClick={() => setEditingSpace(space)}
                             className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-primary transition-all"
+                            aria-label={t('spaceConfig.actions.editSpace')}
                             title={t('spaceConfig.actions.editSpace')}
                           >
                             <Edit2 size={16} />
@@ -250,6 +266,7 @@ const SpaceConfigurationPage: React.FC<SpaceConfigurationPageProps> = () => {
                           <button
                             onClick={() => handleDeleteSpace(space.slug)}
                             className="p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive transition-all"
+                            aria-label={t('spaceConfig.actions.deleteSpace')}
                             title={t('spaceConfig.actions.deleteSpace')}
                           >
                             <Trash2 size={16} />

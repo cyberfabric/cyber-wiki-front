@@ -398,8 +398,11 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
         const n = Number(lineParam);
         setSelectedLines({ start: n, end: n });
         setShowEnrichments(true);
-      } else if (urlParams.get('comments') === '1') {
-        setShowEnrichments(true);
+      } else {
+        setSelectedLines(null);
+        if (urlParams.get('comments') === '1') {
+          setShowEnrichments(true);
+        }
       }
     };
     window.addEventListener('hashchange', handleHashChange);

@@ -40,7 +40,12 @@ export default function BlameView({
   unsupported,
 }: BlameViewProps) {
   const { t } = useTranslation();
-  const lines = useMemo(() => content.split('\n'), [content]);
+  const lines = useMemo(() => {
+    const normalized = content.replace(/\r\n/g, '\n');
+    const parts = normalized.split('\n');
+    if (normalized.endsWith('\n') && parts.length > 1) parts.pop();
+    return parts;
+  }, [content]);
   const blameByLine = useMemo(() => {
     const map = new Map<number, BlameLine>();
     for (const b of blame) map.set(b.line_no, b);

@@ -54,6 +54,7 @@ export const ConflictDetailsDialog: React.FC<ConflictDetailsDialogProps> = ({
   const { t } = useTranslation();
   const enrichmentLabel = useEnrichmentLabel();
   const [index, setIndex] = useState(initialIndex);
+  if (conflicts.length === 0) return null;
   const conflict = conflicts[Math.min(index, conflicts.length - 1)];
   const { firstEnrichment, secondEnrichment, hunk } = (conflict?.data ?? {}) as {
     firstEnrichment?: Enrichment;

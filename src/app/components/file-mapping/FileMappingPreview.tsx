@@ -45,6 +45,7 @@ export function FileMappingPreview({
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
+              aria-label={t('fileMappingPreview.documentsView')}
               title={t('fileMappingPreview.documentsView')}
             >
               <BookOpen size={12} />
@@ -57,6 +58,7 @@ export function FileMappingPreview({
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
               }`}
+              aria-label={t('fileMappingPreview.developerView')}
               title={t('fileMappingPreview.developerView')}
             >
               <Code size={12} />

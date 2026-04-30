@@ -649,13 +649,18 @@ export type CommitDraftChangesRequest = {
   commit_message?: string;
 };
 
+export enum GitOpsLogStatus {
+  Ok = 'ok',
+  Error = 'error',
+  Skip = 'skip',
+}
+
 export type GitOpsLogEntry = {
   /** Unix timestamp (seconds, float). */
   ts: number;
   /** Short verb identifier ("commit", "pr.create.auto", etc). */
   kind: string;
-  /** "ok" | "error" | "skip". */
-  status: string;
+  status: GitOpsLogStatus;
   message: string;
   space_slug: string;
   branch_name: string;

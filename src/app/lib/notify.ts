@@ -40,6 +40,7 @@ function devLog(level: DevLogLevel, message: string, opts: NotifyOptions): void 
 export const notify = {
   success(message: string, options: NotifyOptions = {}): void {
     toast.success(message, options);
+    devLog(DevLogLevel.Info, message, options);
   },
   info(message: string, options: NotifyOptions = {}): void {
     toast.info(message, options);

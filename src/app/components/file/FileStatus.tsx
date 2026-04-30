@@ -41,7 +41,7 @@ function StatusIcon({ code }: { code: HttpStatus | null }) {
 
 export function FileStatus({ code, detail, navigate }: FileStatusProps) {
   const { t } = useTranslation();
-  const base = code !== null ? STATUS_KEY[code] : GENERIC_KEY;
+  const base = (code !== null && STATUS_KEY[code]) ?? GENERIC_KEY;
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 py-12 text-center">

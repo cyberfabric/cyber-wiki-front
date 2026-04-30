@@ -232,6 +232,7 @@ function SpaceCard({ space, isFavorite, onNavigate, onToggleFavorite }: SpaceCar
           onToggleFavorite();
         }}
         className={`absolute top-3 right-3 p-1.5 rounded-md bg-muted transition-opacity ${isFavorite ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+        aria-label={isFavorite ? t('spaces.card.removeFromFavorites') : t('spaces.card.addToFavorites')}
         title={isFavorite ? t('spaces.card.removeFromFavorites') : t('spaces.card.addToFavorites')}
       >
         <Star
@@ -304,6 +305,7 @@ function SpaceListItem({ space, isFavorite, onNavigate, onToggleFavorite }: Spac
           onToggleFavorite();
         }}
         className="p-2 rounded-md opacity-0 group-hover:opacity-100 transition-opacity bg-muted"
+        aria-label={isFavorite ? t('spaces.card.removeFromFavorites') : t('spaces.card.addToFavorites')}
         title={isFavorite ? t('spaces.card.removeFromFavorites') : t('spaces.card.addToFavorites')}
       >
         <Star

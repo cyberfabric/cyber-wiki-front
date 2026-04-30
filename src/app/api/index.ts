@@ -69,6 +69,7 @@ export {
   PRStatus,
   type BlameLine,
   type FileBlameResponse,
+  GitOpsLogStatus,
   type GitOpsLogEntry,
   type GitOpsLogResponse,
   UserTaskStatus,

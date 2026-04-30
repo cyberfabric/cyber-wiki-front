@@ -12,6 +12,8 @@ import { useEffect, useState } from 'react';
 import { eventBus } from '@cyberfabric/react';
 import { loadUserSettings } from '@/app/actions/userSettingsActions';
 
+let settingsRequested = false;
+
 export function useDebugMode(): boolean {
   const [debugMode, setDebugMode] = useState<boolean>(false);
 
@@ -22,7 +24,10 @@ export function useDebugMode(): boolean {
     const updatedSub = eventBus.on('user/settings/updated', ({ settings }) => {
       setDebugMode(settings.debugMode);
     });
-    loadUserSettings();
+    if (!settingsRequested) {
+      settingsRequested = true;
+      loadUserSettings();
+    }
     return () => {
       loadedSub.unsubscribe();
       updatedSub.unsubscribe();

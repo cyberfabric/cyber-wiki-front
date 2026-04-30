@@ -40,6 +40,8 @@ declare module '@cyberfabric/react' {
     'profile/cache/update': { settings: Partial<CacheSettings> };
     /** Cache settings updated */
     'profile/cache/updated': { settings: CacheSettings };
+    /** Cache settings operation error */
+    'profile/cache/error': { error: string };
 
     /** Load the full /me response for the profile page */
     'profile/me/load': void;
