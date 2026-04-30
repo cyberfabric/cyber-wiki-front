@@ -31,6 +31,7 @@ import { createPullRequest } from '@/app/actions/userBranchActions';
 import { PageTitle } from '@/app/layout';
 import {
   EditChangeType,
+  GroupSelectionState,
   PRStatus,
   Urls,
   type DraftChangeListItem,
@@ -87,7 +88,7 @@ function ChangesPage({ navigate }: ChangesPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<EditChangeType | 'all'>('all');
+  const [typeFilter, setTypeFilter] = useState<EditChangeType | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [commitMessage, setCommitMessage] = useState('');
@@ -162,7 +163,7 @@ function ChangesPage({ navigate }: ChangesPageProps) {
 
   const groups = useMemo(() => {
     const filtered = drafts.filter((d) => {
-      if (typeFilter !== 'all' && d.change_type !== typeFilter) return false;
+      if (typeFilter !== null && d.change_type !== typeFilter) return false;
       const q = lowerCase(trim(search));
       if (q) {
         if (
@@ -216,21 +217,21 @@ function ChangesPage({ navigate }: ChangesPageProps) {
     setSelected(allVisibleSelected ? new Set() : new Set(visibleIds));
   };
 
-  const groupSelectionState = (group: SpaceGroup): 'none' | 'some' | 'all' => {
+  const groupSelectionState = (group: SpaceGroup): GroupSelectionState => {
     let selectedCount = 0;
     for (const d of group.drafts) {
       if (selected.has(d.id)) selectedCount++;
     }
-    if (selectedCount === 0) return 'none';
-    if (selectedCount === group.drafts.length) return 'all';
-    return 'some';
+    if (selectedCount === 0) return GroupSelectionState.None;
+    if (selectedCount === group.drafts.length) return GroupSelectionState.All;
+    return GroupSelectionState.Some;
   };
 
   const toggleGroupSelection = (group: SpaceGroup) => {
     setSelected((prev) => {
       const next = new Set(prev);
       const state = groupSelectionState(group);
-      if (state === 'all') {
+      if (state === GroupSelectionState.All) {
         for (const d of group.drafts) next.delete(d.id);
       } else {
         for (const d of group.drafts) next.add(d.id);
@@ -329,11 +330,11 @@ function ChangesPage({ navigate }: ChangesPageProps) {
           <div className="flex items-center gap-2">
             <Filter size={14} className="text-muted-foreground" />
             <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as EditChangeType | 'all')}
+              value={typeFilter ?? ''}
+              onChange={(e) => setTypeFilter(e.target.value === '' ? null : (e.target.value as EditChangeType))}
               className="px-2 py-1 text-sm rounded border border-border bg-background text-foreground"
             >
-              <option value="all">{t('changes.filterTypeAll')}</option>
+              <option value="">{t('changes.filterTypeAll')}</option>
               <option value={EditChangeType.Modify}>{t('changes.typeModified')}</option>
               <option value={EditChangeType.Create}>{t('changes.typeCreated')}</option>
               <option value={EditChangeType.Delete}>{t('changes.typeDeleted')}</option>
@@ -458,9 +459,9 @@ function ChangesPage({ navigate }: ChangesPageProps) {
                 const isOpen = expandedGroups.has(group.spaceSlug);
                 const groupState = groupSelectionState(group);
                 const groupCheckboxIcon =
-                  groupState === 'all' ? (
+                  groupState === GroupSelectionState.All ? (
                     <Check size={14} className="text-green-600" />
-                  ) : groupState === 'some' ? (
+                  ) : groupState === GroupSelectionState.Some ? (
                     <Minus size={14} className="text-primary" />
                   ) : (
                     <Square size={14} className="text-muted-foreground" />
@@ -478,7 +479,7 @@ function ChangesPage({ navigate }: ChangesPageProps) {
                           toggleGroupSelection(group);
                         }}
                         title={
-                          groupState === 'all'
+                          groupState === GroupSelectionState.All
                             ? t('changes.deselectGroup', { space: group.spaceSlug })
                             : t('changes.selectGroup', { space: group.spaceSlug })
                         }

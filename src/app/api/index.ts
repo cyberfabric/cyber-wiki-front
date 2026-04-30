@@ -24,6 +24,8 @@ export {
   DisplayNameSource,
   EnrichmentType,
   EditChangeType,
+  DraftAction,
+  GroupSelectionState,
   CommitAction,
   EnrichmentTab,
   type Space,

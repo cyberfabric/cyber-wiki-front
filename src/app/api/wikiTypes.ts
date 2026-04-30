@@ -486,6 +486,17 @@ export enum EditChangeType {
   Delete = 'delete',
 }
 
+export enum DraftAction {
+  Commit = 'commit',
+  Discard = 'discard',
+}
+
+export enum GroupSelectionState {
+  None = 'none',
+  Some = 'some',
+  All = 'all',
+}
+
 export type EditEnrichment = {
   type: EnrichmentType.Edit;
   id: string;
@@ -499,7 +510,7 @@ export type EditEnrichment = {
   created_at: string;
   updated_at: string;
   diff_hunks?: DiffHunk[];
-  actions: ('commit' | 'discard')[];
+  actions: DraftAction[];
 };
 
 export enum CommitAction {

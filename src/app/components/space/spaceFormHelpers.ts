@@ -7,6 +7,7 @@
 
 import { kebabCase, last, startCase, trim } from 'lodash';
 import type { CreateSpaceRequest } from '@/app/api';
+import { t } from '@/app/lib/i18n';
 
 export const SPACE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -21,11 +22,11 @@ export interface SpaceFieldErrors {
 /** Validate a Git repository URL. Accepts HTTPS / HTTP / SSH-style URLs. */
 export function validateRepoUrl(raw: string): string | undefined {
   const trimmed = trim(raw);
-  if (!trimmed) return 'Repository URL is required';
+  if (!trimmed) return t('validation.repoUrlRequired');
   if (/^https?:\/\/\S+$/i.test(trimmed)) return undefined;
   if (/^ssh:\/\/\S+$/i.test(trimmed)) return undefined;
   if (/^[^@\s]+@[^:\s]+:\S+$/.test(trimmed)) return undefined;
-  return 'Use a full HTTPS URL (https://…) or SSH form (git@host:org/repo.git)';
+  return t('validation.repoUrlInvalid');
 }
 
 /**
@@ -43,32 +44,32 @@ export function validateSpaceForm(
 
   const name = trim(form.name);
   if (!name) {
-    errors.name = 'Name is required';
+    errors.name = t('validation.nameRequired');
   } else if (name.length > 100) {
-    errors.name = 'Keep the name under 100 characters';
+    errors.name = t('validation.nameTooLong');
   }
 
   const slug = trim(form.slug);
   if (!slug) {
-    errors.slug = 'Space key is required';
+    errors.slug = t('validation.slugRequired');
   } else if (slug.length < 2) {
-    errors.slug = 'Space key must be at least 2 characters';
+    errors.slug = t('validation.slugTooShort');
   } else if (slug.length > 60) {
-    errors.slug = 'Keep the space key under 60 characters';
+    errors.slug = t('validation.slugTooLong');
   } else if (!SPACE_SLUG_RE.test(slug)) {
-    errors.slug = 'Use lowercase letters, digits, and single hyphens only';
+    errors.slug = t('validation.slugFormat');
   } else if (existingSlugs.has(slug)) {
-    errors.slug = 'A space with this key already exists';
+    errors.slug = t('validation.slugDuplicate');
   }
 
   const desc = trim(form.description ?? '');
   if (desc.length > 500) {
-    errors.description = 'Keep the description under 500 characters';
+    errors.description = t('validation.descriptionTooLong');
   }
 
   const branch = trim(form.git_default_branch ?? '');
   if (branch && /\s/.test(branch)) {
-    errors.git_default_branch = "Branch name can't contain spaces";
+    errors.git_default_branch = t('validation.branchNoSpaces');
   }
 
   return errors;

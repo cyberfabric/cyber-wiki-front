@@ -905,5 +905,18 @@
       "githubScope": "GitHub token requires {scope} scope for private repositories",
       "bitbucket": "Bitbucket Server requires a Personal Access Token with repository read permissions"
     }
+  },
+  "validation": {
+    "repoUrlRequired": "Repository URL is required",
+    "repoUrlInvalid": "Use a full HTTPS URL (https://…) or SSH form (git@host:org/repo.git)",
+    "nameRequired": "Name is required",
+    "nameTooLong": "Keep the name under 100 characters",
+    "slugRequired": "Space key is required",
+    "slugTooShort": "Space key must be at least 2 characters",
+    "slugTooLong": "Keep the space key under 60 characters",
+    "slugFormat": "Use lowercase letters, digits, and single hyphens only",
+    "slugDuplicate": "A space with this key already exists",
+    "descriptionTooLong": "Keep the description under 500 characters",
+    "branchNoSpaces": "Branch name can't contain spaces"
   }
 }
