@@ -10,6 +10,7 @@
  */
 
 import { useMemo } from 'react';
+import { useTranslation } from '@cyberfabric/react';
 import { GitCommit, Loader2 } from 'lucide-react';
 import type { BlameLine } from '@/app/api';
 
@@ -38,6 +39,7 @@ export default function BlameView({
   error,
   unsupported,
 }: BlameViewProps) {
+  const { t } = useTranslation();
   const lines = useMemo(() => content.split('\n'), [content]);
   const blameByLine = useMemo(() => {
     const map = new Map<number, BlameLine>();
@@ -62,7 +64,7 @@ export default function BlameView({
   if (unsupported) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-        Blame is not supported for this provider.
+        {t('blame.unsupported')}
       </div>
     );
   }
@@ -96,8 +98,14 @@ export default function BlameView({
               className={`${BLAME_GUTTER_WIDTH} flex-shrink-0 px-3 py-0.5 text-[11px] border-r border-border bg-muted/40`}
               title={
                 b
-                  ? `${b.author_name} <${b.author_email}>\n${b.commit_sha}\n${b.author_date}\n${b.summary}`
-                  : 'Not yet committed'
+                  ? t('blame.blameTitleFormat', {
+                      author: b.author_name,
+                      email: b.author_email,
+                      sha: b.commit_sha,
+                      date: b.author_date,
+                      summary: b.summary,
+                    })
+                  : t('blame.notCommittedTitle')
               }
             >
               {showCaption && b ? (
@@ -105,7 +113,7 @@ export default function BlameView({
               ) : b ? (
                 <div className="h-4 border-l-2 border-border ml-1" aria-hidden />
               ) : (
-                <span className="text-muted-foreground/60 italic">not committed</span>
+                <span className="text-muted-foreground/60 italic">{t('blame.notCommitted')}</span>
               )}
             </div>
 
@@ -126,9 +134,10 @@ export default function BlameView({
 }
 
 function BlameCaption({ blame }: { blame: BlameLine }) {
+  const { t } = useTranslation();
   const shortSha = blame.commit_sha ? blame.commit_sha.slice(0, 8) : '—';
   const shortDate = formatBlameDate(blame.author_date);
-  const author = blame.author_name || blame.author_email || 'unknown';
+  const author = blame.author_name || blame.author_email || t('blame.unknownAuthor');
   return (
     <div className="flex items-center gap-2 truncate text-foreground">
       <GitCommit size={10} className="text-muted-foreground flex-shrink-0" />

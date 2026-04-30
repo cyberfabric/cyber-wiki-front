@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from '@cyberfabric/react';
 import { Activity, GitCommit, RotateCw, Trash2 } from 'lucide-react';
 import { GitOpsLogPanel } from '@/app/components/enrichments/GitOpsLogPanel';
 import { PageTitle } from '@/app/layout';
@@ -20,6 +21,7 @@ import {
   getMetrics,
 } from '@/app/lib/performanceTracker';
 import { useDebugMode } from '@/app/lib/useDebugMode';
+import { formatDateTime, formatTime } from '@/app/lib/formatDate';
 import { Urls } from '@/app/api';
 
 interface LogsPageProps {
@@ -27,16 +29,13 @@ interface LogsPageProps {
 }
 
 export default function LogsPage({ navigate }: LogsPageProps) {
+  const { t } = useTranslation();
   const debugMode = useDebugMode();
 
-  // The hook seeds via loadUserSettings which fires `user/settings/loaded`,
-  // so on first render `debugMode` is already false but we don't yet know
-  // whether the seed call has completed. Wait one render before redirecting
-  // so a debug-on user with cached state isn't bounced to Profile.
   const [seeded, setSeeded] = useState(false);
   useEffect(() => {
-    const t = setTimeout(() => setSeeded(true), 50);
-    return () => clearTimeout(t);
+    const tm = setTimeout(() => setSeeded(true), 50);
+    return () => clearTimeout(tm);
   }, []);
 
   useEffect(() => {
@@ -48,10 +47,9 @@ export default function LogsPage({ navigate }: LogsPageProps) {
   if (!debugMode) {
     return (
       <div className="h-full flex flex-col bg-background">
-        <PageTitle title="Logs" subtitle="Diagnostics" />
+        <PageTitle title={t('logs.title')} subtitle={t('logs.subtitleDiagnostics')} />
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-8 text-center">
-          Logs page is only available when Debug mode is enabled in your
-          Profile.
+          {t('logs.debugOnly')}
         </div>
       </div>
     );
@@ -59,23 +57,20 @@ export default function LogsPage({ navigate }: LogsPageProps) {
 
   return (
     <div className="h-full flex flex-col bg-background">
-      <PageTitle
-        title="Logs"
-        subtitle="Diagnostics — git operations and frontend performance metrics"
-      />
+      <PageTitle title={t('logs.title')} subtitle={t('logs.subtitleFull')} />
       <div className="flex-1 overflow-auto px-6 py-4 space-y-6">
         <Section
           icon={<GitCommit size={14} className="text-muted-foreground" />}
-          title="Git operations"
-          description="Commit / push / auto-PR results per user, kept in an in-memory ring buffer on the backend (latest 200)."
+          title={t('logs.git.title')}
+          description={t('logs.git.description')}
         >
           <GitOpsLogPanel />
         </Section>
 
         <Section
           icon={<Activity size={14} className="text-muted-foreground" />}
-          title="Performance metrics"
-          description="Frontend `performanceTracker` recordings since the last page load. Slow operations (>1s) are highlighted."
+          title={t('logs.perf.title')}
+          description={t('logs.perf.description')}
         >
           <PerfMetricsPanel />
         </Section>
@@ -106,20 +101,15 @@ function Section({ icon, title, description, children }: SectionProps) {
   );
 }
 
-// =============================================================================
-// PerfMetricsPanel — read-only view of getMetrics() with reload + clear
-// =============================================================================
-
 function PerfMetricsPanel() {
+  const { t } = useTranslation();
   const [tick, setTick] = useState(0);
-  const reload = useCallback(() => setTick((t) => t + 1), []);
+  const reload = useCallback(() => setTick((n) => n + 1), []);
   const handleClear = useCallback(() => {
     clearMetrics();
     reload();
   }, [reload]);
 
-  // `tick` is in deps so we re-snapshot getMetrics() whenever the user hits
-  // Reload. The tracker module owns the array — we just project it.
   const metrics = useMemo(() => {
     void tick;
     return getMetrics().slice().reverse();
@@ -149,52 +139,51 @@ function PerfMetricsPanel() {
     <div className="space-y-2">
       <div className="flex items-center gap-3 text-xs">
         <span className="text-foreground">
-          <strong>{summary.count}</strong> records
+          <strong>{summary.count}</strong> {t('logs.perf.records')}
         </span>
         <span className="text-muted-foreground">
-          avg {summary.avg.toFixed(0)}ms
+          {t('logs.perf.avg', { ms: summary.avg.toFixed(0) })}
         </span>
         <span className={summary.slow > 0 ? 'text-yellow-700 dark:text-yellow-400' : 'text-muted-foreground'}>
-          {summary.slow} slow (&gt;1s)
+          {t('logs.perf.slow', { count: summary.slow })}
         </span>
         <span className="text-muted-foreground">
-          {formatBytes(summary.totalSize)} total
+          {t('logs.perf.totalSize', { size: formatBytes(summary.totalSize) })}
         </span>
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
             onClick={reload}
             className="flex items-center gap-1 px-2 py-0.5 rounded border border-border bg-background text-foreground hover:bg-accent text-xs"
-            title="Re-read in-memory metrics"
+            title={t('logs.perf.reloadTitle')}
           >
-            <RotateCw size={11} /> Reload
+            <RotateCw size={11} /> {t('common.reload')}
           </button>
           <button
             type="button"
             onClick={handleClear}
             disabled={summary.count === 0}
             className="flex items-center gap-1 px-2 py-0.5 rounded border border-border bg-background text-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40 text-xs"
-            title="Drop all collected metrics"
+            title={t('logs.perf.clearTitle')}
           >
-            <Trash2 size={11} /> Clear
+            <Trash2 size={11} /> {t('common.delete')}
           </button>
         </div>
       </div>
 
       {metrics.length === 0 ? (
         <div className="px-3 py-3 text-xs text-muted-foreground italic">
-          No metrics recorded yet — interact with pages that call APIs to
-          populate.
+          {t('logs.perf.empty')}
         </div>
       ) : (
         <div className="border border-border rounded-md overflow-hidden">
           <table className="w-full text-xs">
             <thead className="bg-muted text-left text-muted-foreground">
               <tr>
-                <th className="px-2 py-1.5 font-medium w-24">Time</th>
-                <th className="px-2 py-1.5 font-medium">Operation</th>
-                <th className="px-2 py-1.5 font-medium w-20 text-right">ms</th>
-                <th className="px-2 py-1.5 font-medium w-20 text-right">Size</th>
+                <th className="px-2 py-1.5 font-medium w-24">{t('logs.perf.colTime')}</th>
+                <th className="px-2 py-1.5 font-medium">{t('logs.perf.colOperation')}</th>
+                <th className="px-2 py-1.5 font-medium w-20 text-right">{t('logs.perf.colMs')}</th>
+                <th className="px-2 py-1.5 font-medium w-20 text-right">{t('logs.perf.colSize')}</th>
               </tr>
             </thead>
             <tbody>
@@ -208,9 +197,9 @@ function PerfMetricsPanel() {
                   >
                     <td
                       className="px-2 py-1 text-muted-foreground font-mono"
-                      title={ts.toLocaleString()}
+                      title={formatDateTime(ts)}
                     >
-                      {ts.toLocaleTimeString()}
+                      {formatTime(ts)}
                     </td>
                     <td className="px-2 py-1 font-mono">
                       <span className="text-foreground">{m.operation}</span>
@@ -230,7 +219,7 @@ function PerfMetricsPanel() {
                       {m.duration.toFixed(0)}
                     </td>
                     <td className="px-2 py-1 text-right text-muted-foreground font-mono">
-                      {m.dataSize ? formatBytes(m.dataSize) : '—'}
+                      {m.dataSize ? formatBytes(m.dataSize) : t('common.missing')}
                     </td>
                   </tr>
                 );

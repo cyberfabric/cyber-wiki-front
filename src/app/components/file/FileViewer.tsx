@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { eventBus } from '@cyberfabric/react';
+import { eventBus, useTranslation } from '@cyberfabric/react';
+import { trim } from 'lodash';
 import {
   FileText,
   Loader2,
@@ -30,6 +31,9 @@ import { MdRenderer } from './MdRenderer';
 import BlameView from './BlameView';
 import { DraftDiffView } from '@/app/components/changes/DraftDiffView';
 import { ConfirmDialog } from '@/app/components/primitives/ConfirmDialog';
+import { Modal, ModalSize } from '@/app/components/primitives/Modal';
+import { FileStatus } from './FileStatus';
+import { HttpStatus } from '@/app/lib/httpStatus';
 import { commitDrafts, getDraft, saveDraft } from '@/app/actions/draftChangeActions';
 import { createPullRequest } from '@/app/actions/userBranchActions';
 import { loadBlame } from '@/app/actions/wikiActions';
@@ -113,9 +117,14 @@ const FileViewer: React.FC<FileViewerProps> = ({
   showTree,
   onToggleTree,
 }) => {
+  const { t } = useTranslation();
   const [content, setContent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Upstream status when the failure maps to a known git-provider HTTP
+   *  code (HttpStatus enum). Drives `<FileStatus>` instead of the inline
+   *  banner. Other errors keep the banner. */
+  const [errorStatus, setErrorStatus] = useState<HttpStatus | null>(null);
   const [copied, setCopied] = useState(false);
 
   const [internalViewMode, setInternalViewMode] = useState<FileViewMode>(FileViewMode.Preview);
@@ -137,7 +146,14 @@ const FileViewer: React.FC<FileViewerProps> = ({
   // Draft content fetched from server for files with `draftId`. When `showDraft`
   // is true (default while a draft exists), read-mode renders this instead of
   // the original file content from git. Toggle lets the user compare.
+  //
+  // `draftOriginal` is the snapshot of the file at the time the draft was
+  // created — it's the correct baseline for "what did I change", because the
+  // on-disk `content` can drift (upstream commits, line-ending normalization,
+  // BOM stripping). Falling back to `content` keeps older drafts working when
+  // the field is missing.
   const [draftContent, setDraftContent] = useState<string | null>(null);
+  const [draftOriginal, setDraftOriginal] = useState<string | null>(null);
   const [showDraft, setShowDraft] = useState(true);
 
   // Commit dialog (single-file commit from this header).
@@ -175,12 +191,18 @@ const FileViewer: React.FC<FileViewerProps> = ({
   // The LCS table is O(N*M); for unusually large files we bail out and skip
   // the highlight rather than freezing the UI.
   const changedLines = useMemo<Set<number> | undefined>(() => {
-    if (!showDraft || draftContent === null || content === null) return undefined;
-    if (draftContent === content) return undefined;
+    if (!showDraft || draftContent === null) return undefined;
+    // Diff against the snapshot the draft itself was based on, NOT against
+    // the latest on-disk content. The latter can drift (upstream commits,
+    // BOM stripping, line-ending normalization) and would flag every line
+    // as changed even though the user only edited one.
+    const baseline = draftOriginal ?? content;
+    if (baseline === null) return undefined;
+    if (draftContent === baseline) return undefined;
     // Normalize line endings before diffing so a CRLF vs LF mismatch
     // (common when the on-disk file was saved on Windows but the draft was
     // produced in the browser) doesn't flag every single line as changed.
-    const orig = content.replace(/\r\n?/g, '\n').split('\n');
+    const orig = baseline.replace(/\r\n?/g, '\n').split('\n');
     const draftL = draftContent.replace(/\r\n?/g, '\n').split('\n');
     const n = orig.length;
     const m = draftL.length;
@@ -226,11 +248,14 @@ const FileViewer: React.FC<FileViewerProps> = ({
       if (!inLcs[k]) out.add(k + 1);
     }
     return out;
-  }, [showDraft, draftContent, content]);
+  }, [showDraft, draftContent, draftOriginal, content]);
 
-  // Force Source mode when no useful preview is available.
+  // Force Source when the file has no useful preview AND the user landed in
+  // Preview mode — Preview is the only mode that doesn't render anything
+  // meaningful for non-markdown. Diff/Blame work for any file and must NOT
+  // be reverted here, otherwise their toolbar buttons silently no-op.
   useEffect(() => {
-    if (!hasUsefulPreview && viewMode !== FileViewMode.Source) {
+    if (!hasUsefulPreview && viewMode === FileViewMode.Preview) {
       setViewMode(FileViewMode.Source);
     }
   }, [hasUsefulPreview, viewMode, setViewMode]);
@@ -246,6 +271,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
       if (payload.filePath === filePathRef.current) {
         setLoading(true);
         setError(null);
+        setErrorStatus(null);
         setContent(null);
       }
     });
@@ -259,6 +285,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
     const subError = eventBus.on('wiki/file/error', (payload) => {
       if (payload.filePath === filePathRef.current) {
         setError(payload.error);
+        setErrorStatus(payload.status ?? null);
         setLoading(false);
       }
     });
@@ -276,6 +303,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
     setSavedToast(false);
     setShowDraft(true);
     setDraftContent(null);
+    setDraftOriginal(null);
     // Each file owns its own blame; clear so the previous file's gutter
     // doesn't briefly show next to a different file's source while the new
     // request is in flight.
@@ -335,7 +363,10 @@ const FileViewer: React.FC<FileViewerProps> = ({
       setContent('');
       setLoading(false);
     }
-    if (error) setError(null);
+    if (error) {
+      setError(null);
+      setErrorStatus(null);
+    }
   }, [content, error, draftId, draftContent]);
 
   // Fetch draft content whenever the active draftId changes — show "my
@@ -343,11 +374,16 @@ const FileViewer: React.FC<FileViewerProps> = ({
   useEffect(() => {
     if (!draftId) {
       setDraftContent(null);
+      setDraftOriginal(null);
       return undefined;
     }
     const sub = eventBus.on('wiki/draft/got', ({ draft: d }) => {
-      if (d.id === draftId && d.modified_content !== undefined) {
+      if (d.id !== draftId) return;
+      if (d.modified_content !== undefined) {
         setDraftContent(d.modified_content);
+      }
+      if (d.original_content !== undefined) {
+        setDraftOriginal(d.original_content);
       }
     });
     getDraft(draftId);
@@ -482,15 +518,28 @@ const FileViewer: React.FC<FileViewerProps> = ({
     }
   }, [content]);
 
-  const lines = useMemo(() => content?.split('\n') ?? [], [content]);
+  /**
+   * Content the user is actually looking at right now — the stat bar must
+   * mirror this, not the original. Picks `draft` in non-markdown edit
+   * mode, the staged draft in read-mode "My changes", and falls back to
+   * the upstream `content`. Markdown edit mode owns its own stat bar in
+   * `MdRenderer`, so no branch is needed for it here.
+   */
+  const displayedContent = useMemo(() => {
+    if (isEditMode && !isMarkdown) return draft;
+    if (draftContent !== null && showDraft) return draftContent;
+    return content ?? '';
+  }, [content, draft, draftContent, isEditMode, isMarkdown, showDraft]);
+
+  const lines = useMemo(() => displayedContent.split('\n'), [displayedContent]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       <ConfirmDialog
         open={pendingDiscard}
-        title="Discard changes?"
-        message="You have unsaved edits. Discard them?"
-        confirmLabel="Discard"
+        title={t('fileViewer.discardConfirmTitle')}
+        message={t('fileViewer.discardConfirmMessage')}
+        confirmLabel={t('common.discard')}
         danger
         onConfirm={performDiscard}
         onCancel={() => setPendingDiscard(false)}
@@ -499,78 +548,67 @@ const FileViewer: React.FC<FileViewerProps> = ({
       {/* Commit dialog — single-file commit. The Changes page is still the
           place for multi-file commits and PR creation; this is a quick path
           for the file the user is currently looking at. */}
-      {commitOpen && draftId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md mx-4 rounded-lg shadow-xl bg-card border border-border">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-border">
-              <h3 className="text-base font-semibold text-foreground">Commit changes</h3>
-              <button
-                type="button"
-                onClick={() => setCommitOpen(false)}
-                className="p-1 rounded text-muted-foreground hover:bg-muted"
-              >
-                <X size={16} />
-              </button>
+      {draftId && (
+        <Modal
+          open={commitOpen}
+          onClose={() => setCommitOpen(false)}
+          size={ModalSize.Md}
+          title={t('fileViewer.commitDialogTitle')}
+        >
+          <Modal.Body className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {t('fileViewer.commitDialogIntro', { fileName })}
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1.5">
+                {t('fileViewer.commitMessageLabel')} <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                onFocus={(e) => e.currentTarget.select()}
+                placeholder={t('fileViewer.commitMessagePlaceholder')}
+                rows={3}
+                required
+                className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
+                autoFocus
+              />
             </div>
-            <div className="px-5 py-4 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Commit your draft for <span className="font-medium text-foreground">{fileName}</span>{' '}
-                to the repository. This creates a real commit on a user branch — your team
-                will be able to see and review it.
-              </p>
-              <div>
-                <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Commit message <span className="text-destructive">*</span>
-                </label>
-                <textarea
-                  value={commitMessage}
-                  onChange={(e) => setCommitMessage(e.target.value)}
-                  onFocus={(e) => e.currentTarget.select()}
-                  placeholder="Describe what you changed"
-                  rows={3}
-                  required
-                  className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary"
-                  autoFocus
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                For multi-file commits or to open a pull request, use the{' '}
-                <a href="#changes" className="underline hover:text-foreground">
-                  Changes page
-                </a>
-                .
-              </p>
-            </div>
-            <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setCommitOpen(false)}
-                className="px-3 py-1.5 rounded-md text-sm text-foreground hover:bg-muted"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const message = commitMessage.trim();
-                  if (!message) return;
-                  commitDrafts([draftId], message);
-                  setCommitOpen(false);
-                }}
-                disabled={!commitMessage.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                title={
-                  !commitMessage.trim()
-                    ? 'Enter a commit message first'
-                    : 'Commit'
-                }
-              >
-                <GitCommit size={14} />
-                Commit
-              </button>
-            </div>
-          </div>
-        </div>
+            <p className="text-xs text-muted-foreground">
+              {t('fileViewer.commitDialogFooterPrefix')}{' '}
+              <a href="#changes" className="underline hover:text-foreground">
+                {t('fileViewer.commitDialogFooterLink')}
+              </a>
+              .
+            </p>
+          </Modal.Body>
+          <Modal.Footer>
+            <button
+              type="button"
+              onClick={() => setCommitOpen(false)}
+              className="px-3 py-1.5 rounded-md text-sm text-foreground hover:bg-muted"
+            >
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const message = trim(commitMessage);
+                if (!message) return;
+                commitDrafts([draftId], message);
+                setCommitOpen(false);
+              }}
+              disabled={!trim(commitMessage)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={
+                !trim(commitMessage) ? t('fileViewer.commitTitleEmpty') : t('fileViewer.commitTitleReady')
+              }
+            >
+              <GitCommit size={14} />
+              {t('fileViewer.commitButton')}
+            </button>
+          </Modal.Footer>
+        </Modal>
       )}
 
       {/* Header */}
@@ -581,7 +619,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
             type="button"
             onClick={onToggleTree}
             className="p-1.5 rounded text-muted-foreground hover:bg-accent hover:text-accent-foreground flex-shrink-0"
-            title={showTree ? 'Hide file tree' : 'Show file tree'}
+            title={showTree ? t('fileViewer.hideTreeTitle') : t('fileViewer.showTreeTitle')}
           >
             {showTree ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
           </button>
@@ -595,12 +633,12 @@ const FileViewer: React.FC<FileViewerProps> = ({
             </span>
             {isEditMode && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary flex-shrink-0">
-                Editing
+                {t('fileViewer.editingBadge')}
               </span>
             )}
             {savedToast && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-300 flex-shrink-0">
-                Saved
+                {t('fileViewer.savedBadge')}
               </span>
             )}
             {hasUnsavedDraft && !isEditMode && !savedToast && (
@@ -608,14 +646,10 @@ const FileViewer: React.FC<FileViewerProps> = ({
                 type="button"
                 onClick={() => setShowDraft((v) => !v)}
                 className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-950/30 dark:text-yellow-300 flex-shrink-0 hover:bg-yellow-200 dark:hover:bg-yellow-900/50"
-                title={
-                  showDraft
-                    ? 'Showing your changes — click to view original'
-                    : 'Showing original — click to view your changes'
-                }
+                title={showDraft ? t('fileViewer.myChangesTooltip') : t('fileViewer.originalTooltip')}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-yellow-500" />
-                {showDraft ? 'My changes' : 'Original'}
+                {showDraft ? t('fileViewer.myChanges') : t('fileViewer.originalLabel')}
               </button>
             )}
           </div>
@@ -630,7 +664,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
             <button
               onClick={handleSave}
               disabled={!isDirty}
-              title="Save draft"
+              title={t('fileViewer.saveTitle')}
               className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-border disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 ${
                 isDirty
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -638,11 +672,11 @@ const FileViewer: React.FC<FileViewerProps> = ({
               }`}
             >
               <Save size={12} />
-              Save
+              {t('fileViewer.save')}
             </button>
             <button
               onClick={handleCancelEdit}
-              title="Discard changes"
+              title={t('fileViewer.discardEditsTitle')}
               className="flex items-center px-1.5 py-1 text-xs rounded border border-border bg-background text-muted-foreground hover:bg-accent flex-shrink-0"
             >
               <X size={13} />
@@ -654,11 +688,11 @@ const FileViewer: React.FC<FileViewerProps> = ({
               <button
                 onClick={handleStartEdit}
                 disabled={content === null}
-                title="Edit file"
+                title={t('fileViewer.editFileTitle')}
                 className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border border-border bg-background text-foreground hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
               >
                 <Pencil size={12} />
-                Edit
+                {t('fileViewer.edit')}
               </button>
               {hasUnsavedDraft && draftId && (
                 <button
@@ -667,14 +701,14 @@ const FileViewer: React.FC<FileViewerProps> = ({
                     // a forced typing exercise — the user can hit Commit
                     // immediately or refine the wording. Backend rejects
                     // empty messages, so we don't ship the empty state.
-                    setCommitMessage(`Update ${fileName}`);
+                    setCommitMessage(t('fileViewer.commitMessagePrefill', { fileName }));
                     setCommitOpen(true);
                   }}
-                  title="Commit this draft to the repository"
+                  title={t('fileViewer.commitDraftTitle')}
                   className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 flex-shrink-0"
                 >
                   <GitCommit size={12} />
-                  Commit
+                  {t('fileViewer.commitButton')}
                 </button>
               )}
             </>
@@ -692,7 +726,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
               <button
                 onClick={() => setViewMode(FileViewMode.Preview)}
                 className={`p-1.5 transition-colors ${viewMode === FileViewMode.Preview ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
-                title="Preview"
+                title={t('fileViewer.previewTitle')}
               >
                 <Eye size={14} />
               </button>
@@ -700,7 +734,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
             <button
               onClick={() => setViewMode(FileViewMode.Source)}
               className={`p-1.5 transition-colors ${viewMode === FileViewMode.Source ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
-              title="Source"
+              title={t('fileViewer.sourceTitle')}
             >
               <Code size={14} />
             </button>
@@ -708,7 +742,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
               <button
                 onClick={() => setViewMode(FileViewMode.Diff)}
                 className={`p-1.5 transition-colors ${viewMode === FileViewMode.Diff ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
-                title="Diff — see exactly what changed"
+                title={t('fileViewer.diffTitle')}
               >
                 <GitCompare size={14} />
               </button>
@@ -717,7 +751,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
               <button
                 onClick={() => setViewMode(FileViewMode.Blame)}
                 className={`p-1.5 transition-colors ${viewMode === FileViewMode.Blame ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent'}`}
-                title="Blame — show who last modified each line"
+                title={t('fileViewer.blameTitle')}
               >
                 <History size={14} />
               </button>
@@ -735,7 +769,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
             onClick={handleCopy}
             disabled={!content}
             className="p-1.5 rounded hover:bg-background transition-colors text-muted-foreground disabled:opacity-30 flex-shrink-0"
-            title="Copy content"
+            title={t('fileViewer.copyTitle')}
           >
             {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
           </button>
@@ -746,7 +780,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
           <button
             type="button"
             onClick={onToggleComments}
-            title={showComments ? 'Hide enrichments panel' : 'Show enrichments panel'}
+            title={showComments ? t('fileViewer.hideCommentsTitle') : t('fileViewer.showCommentsTitle')}
             className={`relative p-1.5 rounded flex-shrink-0 transition-colors ${
               showComments
                 ? 'bg-primary text-primary-foreground hover:bg-primary/90'
@@ -797,7 +831,10 @@ const FileViewer: React.FC<FileViewerProps> = ({
           the drafts list arrives) or while the known draft body is still in
           flight. The fallback effect will clear the error once draftContent
           loads; until then, render a spinner instead of a misleading error. */}
-      {error && !errorSuppressed && (
+      {error && !errorSuppressed && errorStatus !== null && (
+        <FileStatus code={errorStatus} />
+      )}
+      {error && !errorSuppressed && errorStatus === null && (
         <div className="flex-1 flex items-center justify-center">
           <div className="flex items-center gap-2 text-destructive">
             <AlertCircle size={16} />
@@ -832,7 +869,7 @@ const FileViewer: React.FC<FileViewerProps> = ({
       {!loading && !error && content !== null && !isEditMode && viewMode === FileViewMode.Diff && (
         <div className="flex-1 overflow-auto">
           <DraftDiffView
-            original={content}
+            original={draftOriginal ?? content}
             modified={draftContent ?? content}
           />
         </div>
@@ -888,8 +925,8 @@ const FileViewer: React.FC<FileViewerProps> = ({
       {/* Footer status bar — hidden during Markdown edit (MdRenderer has its own). */}
       {!loading && content !== null && !(isEditMode && isMarkdown) && (
         <div className="border-t border-border px-4 py-1 flex items-center gap-4 text-xs text-muted-foreground bg-muted">
-          <span>{lines.length} lines</span>
-          <span>{content.length} characters</span>
+          <span>{t('fileViewer.linesCount', { count: lines.length })}</span>
+          <span>{t('fileViewer.charactersCount', { count: displayedContent.length })}</span>
           <span className="ml-auto">{spaceSlug} / {filePath}</span>
         </div>
       )}
@@ -911,16 +948,17 @@ interface PostCommitBannerProps {
 }
 
 function PostCommitBanner({ status, url, error, retrying, onRetry, onDismiss }: PostCommitBannerProps) {
+  const { t } = useTranslation();
   const isOk = status === PRStatus.Created || status === PRStatus.Existing;
   const isFail = status === PRStatus.Failed;
   const headline =
     status === PRStatus.Created
-      ? 'Pull request opened.'
+      ? t('postCommitBanner.headlineCreated')
       : status === PRStatus.Existing
-        ? 'New commit pushed to existing PR.'
+        ? t('postCommitBanner.headlineExisting')
         : status === PRStatus.Failed
-          ? 'PR could not be opened automatically.'
-          : 'PR not opened — edit fork or token missing.';
+          ? t('postCommitBanner.headlineFailed')
+          : t('postCommitBanner.headlineNotAttempted');
   return (
     <div
       className={`flex items-center gap-2 px-3 py-1.5 text-xs border-b ${
@@ -960,15 +998,15 @@ function PostCommitBanner({ status, url, error, retrying, onRetry, onDismiss }: 
           className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded border border-yellow-500/40 bg-yellow-500/10 text-yellow-800 dark:text-yellow-200 hover:bg-yellow-500/20 disabled:opacity-50 flex-shrink-0"
         >
           <GitCommit size={11} />
-          {retrying ? 'Retrying…' : 'Retry PR'}
+          {retrying ? t('postCommitBanner.retrying') : t('postCommitBanner.retry')}
         </button>
       )}
       <button
         type="button"
         onClick={onDismiss}
         className={`${isFail ? '' : 'ml-auto'} p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-accent flex-shrink-0`}
-        title="Dismiss"
-        aria-label="Dismiss"
+        title={t('fileViewer.dismissTitle')}
+        aria-label={t('fileViewer.dismissTitle')}
       >
         <X size={12} />
       </button>

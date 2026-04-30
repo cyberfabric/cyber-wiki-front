@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { eventBus } from '@cyberfabric/react';
+import { eventBus, useTranslation } from '@cyberfabric/react';
 import {
   AlertCircle,
   Bug,
@@ -28,6 +28,7 @@ import { ChangesTab } from './ChangesTab';
 import { GitOpsLogPanel } from './GitOpsLogPanel';
 import { loadComments, loadEnrichments } from '@/app/actions/enrichmentActions';
 import { useDebugMode } from '@/app/lib/useDebugMode';
+import { formatDateTime } from '@/app/lib/formatDate';
 import {
   EnrichmentTab,
   type CommentData,
@@ -58,6 +59,7 @@ export const EnrichmentPanel: React.FC<EnrichmentPanelProps> = ({
   spaceSlug,
   currentFilePath,
 }) => {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<EnrichmentTab>(
     initialTab ?? EnrichmentTab.Comments,
   );
@@ -120,41 +122,37 @@ export const EnrichmentPanel: React.FC<EnrichmentPanelProps> = ({
   const tabs: Array<{ id: EnrichmentTab; label: string; icon: React.ReactNode; count: number }> = [
     {
       id: EnrichmentTab.Comments,
-      label: 'Comments',
+      label: t('enrichmentPanel.tabComments'),
       icon: <MessageSquare size={16} />,
       count: commentCount,
     },
     {
       id: EnrichmentTab.Diffs,
-      label: 'Diffs',
+      label: t('enrichmentPanel.tabDiffs'),
       icon: <FileEdit size={16} />,
       count: diffCount,
     },
     {
       id: EnrichmentTab.PRs,
-      label: 'PRs',
+      label: t('enrichmentPanel.tabPRs'),
       icon: <GitBranch size={16} />,
       count: prCount,
     },
     {
       id: EnrichmentTab.Local,
-      label: 'Local',
+      label: t('enrichmentPanel.tabLocal'),
       icon: <AlertCircle size={16} />,
       count: localCount,
     },
     {
       id: EnrichmentTab.Changes,
-      label: 'Changes',
+      label: t('enrichmentPanel.tabChanges'),
       icon: <Edit3 size={16} />,
       count: changesCount,
     },
-    // Surfaces the raw enrichments + comments payload so misaligned
-    // sourceUris, missing fields, or unexpected shapes can be diagnosed
-    // without opening DevTools. Gated behind the Profile → Debug-mode toggle
-    // so it doesn't clutter the regular UI.
     {
       id: EnrichmentTab.Debug,
-      label: 'Debug',
+      label: t('enrichmentPanel.tabDebug'),
       icon: <Bug size={16} />,
       count: 0,
     },
@@ -172,7 +170,7 @@ export const EnrichmentPanel: React.FC<EnrichmentPanelProps> = ({
     return (
       <div className="flex flex-col h-full bg-background">
         <div className="flex items-center justify-center flex-1 p-8">
-          <div className="text-destructive text-sm">Failed to load enrichments</div>
+          <div className="text-destructive text-sm">{t('enrichmentPanel.errorTitle')}</div>
         </div>
         {debugMode && (
           <div className="flex border-t border-border">
@@ -182,7 +180,7 @@ export const EnrichmentPanel: React.FC<EnrichmentPanelProps> = ({
               className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent"
             >
               <Bug size={14} />
-              Open Debug
+              {t('enrichmentPanel.openDebug')}
             </button>
           </div>
         )}
@@ -289,11 +287,12 @@ EnrichmentPanel.displayName = 'EnrichmentPanel';
 // =============================================================================
 
 function DiffsTabContent({ diffs }: { diffs: DiffEnrichment[] }) {
+  const { t } = useTranslation();
   if (diffs.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <FileEdit size={32} className="mx-auto mb-2 opacity-50" />
-        <div className="text-sm">No pending diffs</div>
+        <div className="text-sm">{t('enrichmentPanel.diffsEmpty')}</div>
       </div>
     );
   }
@@ -367,11 +366,12 @@ function ReviewerBadge({ reviewer }: { reviewer: PRReviewer }) {
 }
 
 function PRsTabContent({ prs }: { prs: PREnrichment[] }) {
+  const { t } = useTranslation();
   if (prs.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <GitPullRequest size={32} className="mx-auto mb-2 opacity-50" />
-        <div className="text-sm">No pull requests</div>
+        <div className="text-sm">{t('enrichmentPanel.prsEmpty')}</div>
       </div>
     );
   }
@@ -387,11 +387,11 @@ function PRsTabContent({ prs }: { prs: PREnrichment[] }) {
             </span>
           </div>
           <div className="text-xs text-muted-foreground">
-            by {pr.pr_author} · {pr.pr_state}
+            {t('enrichmentPanel.prsByAuthor', { author: pr.pr_author, state: pr.pr_state })}
           </div>
           {pr.reviewers && pr.reviewers.length > 0 && (
             <div className="mt-2 pt-2 border-t border-border">
-              <div className="text-xs text-muted-foreground mb-1.5">Reviewers</div>
+              <div className="text-xs text-muted-foreground mb-1.5">{t('enrichmentPanel.reviewersHeader')}</div>
               <div className="flex flex-wrap gap-2">
                 {pr.reviewers.map((r) => (
                   <ReviewerBadge key={r.username} reviewer={r} />
@@ -406,7 +406,7 @@ function PRsTabContent({ prs }: { prs: PREnrichment[] }) {
               rel="noopener noreferrer"
               className="text-xs text-primary hover:underline mt-2 inline-block"
             >
-              View PR →
+              {t('enrichmentPanel.viewPR')}
             </a>
           )}
         </div>
@@ -446,6 +446,7 @@ function DebugTabContent({
   error,
   onReload,
 }: DebugTabContentProps) {
+  const { t } = useTranslation();
   const safeEnrichments: EnrichmentsResponse = enrichments ?? {};
   const summary = {
     sourceUri,
@@ -468,28 +469,45 @@ function DebugTabContent({
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted text-xs">
         <Bug size={12} className="text-muted-foreground" />
-        <span className="font-medium text-foreground">Debug</span>
-        <span className="text-muted-foreground">— raw enrichment payloads</span>
+        <span className="font-medium text-foreground">{t('enrichmentPanel.debugTitle')}</span>
+        <span className="text-muted-foreground">{t('enrichmentPanel.debugSubtitle')}</span>
         <button
           type="button"
           onClick={onReload}
           className="ml-auto px-2 py-0.5 rounded border border-border bg-background text-foreground hover:bg-accent"
-          title="Re-fetch enrichments and comments for this file"
+          title={t('enrichmentPanel.debugReloadTitle')}
         >
-          Reload
+          {t('enrichmentPanel.debugReload')}
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         <GitOpsLogPanel spaceSlug={spaceSlug} />
-        <DebugSection title="Summary" value={summary} />
-        <DebugSection title={`comments (${comments.length})`} value={comments} />
-        <DebugSection title="enrichments" value={enrichments} />
+        <DebugSection title={t('enrichmentPanel.debugSummary')} value={summary} />
+        <DebugSection title={t('enrichmentPanel.debugCommentsLabel', { count: comments.length })} value={comments} />
+        <DebugSection title={t('enrichmentPanel.debugEnrichmentsLabel')} value={enrichments} />
       </div>
     </div>
   );
 }
 
-function DebugSection({ title, value }: { title: string; value: unknown }) {
+// Local JSON-shaped value. Debug viewer only stringifies the payload, so a
+// recursive any-shape JSON type keeps the public surface free of `unknown`.
+type DebugValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | DebugValue[]
+  | { [key: string]: DebugValue };
+
+interface DebugSectionProps {
+  title: string;
+  value: DebugValue;
+}
+
+function DebugSection({ title, value }: DebugSectionProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   // Stringify defensively so circular references (rare, but possible from
   // hand-crafted payloads in tests) don't blow up the whole panel.
@@ -519,10 +537,10 @@ function DebugSection({ title, value }: { title: string; value: unknown }) {
             void handleCopy();
           }}
           className="flex items-center gap-1 px-1.5 py-0.5 rounded text-muted-foreground hover:bg-accent hover:text-foreground"
-          title="Copy JSON"
+          title={t('enrichmentPanel.debugCopyTitle')}
         >
           {copied ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('enrichmentPanel.debugCopied') : t('enrichmentPanel.debugCopy')}
         </button>
       </summary>
       <pre className="px-3 py-2 text-[11px] leading-snug font-mono text-foreground whitespace-pre-wrap break-words border-t border-border bg-background">
@@ -533,11 +551,12 @@ function DebugSection({ title, value }: { title: string; value: unknown }) {
 }
 
 function LocalChangesTabContent({ changes }: { changes: LocalChangeEnrichment[] }) {
+  const { t } = useTranslation();
   if (changes.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
         <AlertCircle size={32} className="mx-auto mb-2 opacity-50" />
-        <div className="text-sm">No local changes</div>
+        <div className="text-sm">{t('enrichmentPanel.localEmpty')}</div>
       </div>
     );
   }
@@ -548,12 +567,12 @@ function LocalChangesTabContent({ changes }: { changes: LocalChangeEnrichment[] 
           <div className="flex items-center gap-2 mb-1">
             <AlertCircle size={14} className="text-yellow-600" />
             <span className="text-sm font-medium text-foreground">
-              {change.commit_message || 'Local change'}
+              {change.commit_message || t('enrichmentPanel.localDefaultLabel')}
             </span>
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>{change.status}</span>
-            <span>{new Date(change.created_at).toLocaleString()}</span>
+            <span>{formatDateTime(change.created_at)}</span>
           </div>
         </div>
       ))}

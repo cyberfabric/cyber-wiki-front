@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { eventBus } from '@cyberfabric/react';
+import { eventBus, useTranslation } from '@cyberfabric/react';
 import {
   FolderOpen,
   File,
@@ -61,6 +61,7 @@ interface SpaceViewPageProps {
 }
 
 const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
+  const { t } = useTranslation();
   const [allSpaces, setAllSpaces] = useState<Space[]>([]);
   const [selectedSpace, setSelectedSpace] = useState<Space | null>(null);
   const [tree, setTree] = useState<TreeNode[]>([]);
@@ -475,13 +476,13 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
   if (!selectedSpace) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-background text-muted-foreground gap-4">
-        <p className="text-lg">No space selected</p>
+        <p className="text-lg">{t('spaceView.noSpaceSelected')}</p>
         <button
           onClick={() => navigate(Urls.Spaces)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:opacity-90"
         >
           <ArrowLeft size={16} />
-          Browse Spaces
+          {t('spaceView.browseSpaces')}
         </button>
       </div>
     );
@@ -501,14 +502,14 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             <button
               onClick={() => handleViewModeChange(ViewMode.Documents)}
               className={`p-1 rounded transition-colors ${viewMode === ViewMode.Documents ? 'bg-card text-foreground' : 'text-muted-foreground'}`}
-              title="Render — show display names from file mapping"
+              title={t('spaceView.tree.viewRender')}
             >
               <Eye className="w-3 h-3" />
             </button>
             <button
               onClick={() => handleViewModeChange(ViewMode.Dev)}
               className={`p-1 rounded transition-colors ${viewMode === ViewMode.Dev ? 'bg-card text-foreground' : 'text-muted-foreground'}`}
-              title="Raw — show real filenames"
+              title={t('spaceView.tree.viewRaw')}
             >
               <Code className="w-3 h-3" />
             </button>
@@ -516,14 +517,14 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
           <button
             onClick={handleToggleExpandAll}
             className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground flex-shrink-0"
-            title={allExpanded ? 'Collapse all' : 'Expand all'}
+            title={allExpanded ? t('spaceView.tree.collapseAll') : t('spaceView.tree.expandAll')}
           >
             {allExpanded ? <ChevronsDownUp size={14} /> : <ChevronsUpDown size={14} />}
           </button>
           <button
             onClick={() => setShowCreateFile(true)}
             className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground flex-shrink-0"
-            title="Add file — create a new file in this repository"
+            title={t('spaceView.tree.addFile')}
           >
             <FilePlus size={14} />
           </button>
@@ -543,7 +544,7 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
             </div>
           )}
           {!treeLoading && !treeError && tree.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">No files found</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{t('spaceView.tree.noFiles')}</p>
           )}
           {!treeLoading &&
             tree.map((node) => (
@@ -604,9 +605,9 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-center px-8 py-12 text-muted-foreground">
             <FileText size={56} strokeWidth={1.5} className="mb-4 opacity-30" />
-            <p className="text-base font-semibold text-foreground">Select a document</p>
+            <p className="text-base font-semibold text-foreground">{t('spaceView.selectDocumentTitle')}</p>
             <p className="text-sm mt-1 max-w-xs">
-              Pick any file from the tree on the left to view or edit its contents.
+              {t('spaceView.selectDocumentHint')}
             </p>
           </div>
         )}
@@ -620,12 +621,12 @@ const SpaceViewPage: React.FC<SpaceViewPageProps> = ({ navigate }) => {
           <div className="px-3 py-1.5 flex items-center justify-between border-b border-border">
             <div className="flex items-center gap-2">
               <Layers size={14} className="text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase text-muted-foreground">Enrichments</span>
+              <span className="text-xs font-semibold uppercase text-muted-foreground">{t('spaceView.enrichments')}</span>
             </div>
             <button
               onClick={() => setShowEnrichments(false)}
               className="p-1 rounded hover:bg-muted transition-colors text-muted-foreground"
-              title="Close panel"
+              title={t('spaceView.closePanel')}
             >
               <PanelRightClose size={14} />
             </button>
@@ -688,6 +689,7 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
   draftPaths,
   onSelect,
 }) => {
+  const { t } = useTranslation();
   const isExpanded = expandedPaths.has(node.path);
   const isSelected = node.path === selectedPath;
   const isDir = node.type === 'dir';
@@ -727,8 +729,8 @@ const TreeNodeItem: React.FC<TreeNodeItemProps> = ({
         {hasDraft && (
           <span
             className="flex-shrink-0 inline-block w-2 h-2 rounded-full bg-yellow-500"
-            title="Has unsaved changes"
-            aria-label="Has unsaved changes"
+            title={t('spaceView.tree.draftMarker')}
+            aria-label={t('spaceView.tree.draftMarker')}
           />
         )}
       </button>

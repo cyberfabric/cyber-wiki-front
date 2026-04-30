@@ -7,6 +7,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from '@cyberfabric/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MessageSquare } from 'lucide-react';
@@ -52,6 +53,7 @@ const SourceView: React.FC<SourceViewProps> = ({
   commentLines,
   changedLines,
 }) => {
+  const { t } = useTranslation();
   const lines = content.split('\n');
   return (
     <div className="font-mono text-sm leading-relaxed">
@@ -85,11 +87,11 @@ const SourceView: React.FC<SourceViewProps> = ({
                   className="select-none align-top w-6 px-1 text-center"
                   title={
                     hasComment && isChanged
-                      ? 'Has comment · modified'
+                      ? t('fileRenderer.hasCommentAndModified')
                       : hasComment
-                        ? 'Has comment'
+                        ? t('fileRenderer.hasComment')
                         : isChanged
-                          ? 'Modified'
+                          ? t('fileRenderer.modified')
                           : undefined
                   }
                 >
@@ -97,14 +99,14 @@ const SourceView: React.FC<SourceViewProps> = ({
                     {isChanged && (
                       <span
                         className="inline-block w-1 h-3 rounded-sm bg-yellow-500"
-                        aria-label="Modified"
+                        aria-label={t('fileRenderer.modified')}
                       />
                     )}
                     {hasComment && (
                       <MessageSquare
                         size={10}
                         className="text-blue-500"
-                        aria-label="Has comment"
+                        aria-label={t('fileRenderer.hasComment')}
                       />
                     )}
                   </div>
@@ -219,6 +221,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   commentLines,
   changedLines,
 }) => {
+  const { t } = useTranslation();
   // When no click handler, render the whole content in a single ReactMarkdown
   // call — preserves block-spanning constructs (lists, blockquotes) better.
   if (!onLineClick) {
@@ -256,7 +259,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
             data-line-end={block.endLine}
             onClick={(e) => onLineClick(block.startLine, { shift: e.shiftKey })}
             className={`relative cursor-pointer rounded -mx-2 px-2 py-0.5 transition-colors ${stateCls}`}
-            title={`Lines ${block.startLine}–${block.endLine} — click to comment, Shift+click to extend range`}
+            title={t('fileRenderer.blockTitle', { start: block.startLine, end: block.endLine })}
           >
             {/* Block-level markers in the left margin. */}
             {(hasComment || isChanged) && (
@@ -264,12 +267,12 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
                 {isChanged && (
                   <span
                     className="block w-1 h-3 rounded-sm bg-yellow-500"
-                    aria-label="Modified"
-                    title="Modified"
+                    aria-label={t('fileRenderer.modified')}
+                    title={t('fileRenderer.modified')}
                   />
                 )}
                 {hasComment && (
-                  <MessageSquare size={11} className="text-blue-500" aria-label="Has comment" />
+                  <MessageSquare size={11} className="text-blue-500" aria-label={t('fileRenderer.hasComment')} />
                 )}
               </div>
             )}
