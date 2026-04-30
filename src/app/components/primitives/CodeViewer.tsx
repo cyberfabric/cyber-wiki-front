@@ -104,15 +104,20 @@ const CodeViewer: React.FC<CodeViewerProps> = ({
         fontFamily: FONT_FAMILY,
       });
 
-      // Click on glyph margin OR line numbers selects the line for commenting.
-      // Shift-click extends the existing range (matches SourceView semantics).
-      editor.onMouseDown((e) => {
-        const t = e.target.type;
-        const isGlyph = t === monaco.editor.MouseTargetType.GLYPH_MARGIN;
-        const isLineNumber = t === monaco.editor.MouseTargetType.LINE_NUMBERS;
-        if ((isGlyph || isLineNumber) && e.target.position) {
-          const line = e.target.position.lineNumber;
-          onLineClickRef.current?.(line, { shift: e.event.shiftKey });
+      // Sync Monaco's own selection (single-click, shift-click, drag-select,
+      // keyboard) to the parent's `selectedLines` model. Two calls express a
+      // multi-line range: first anchors the start line (shift=false), second
+      // extends to the end line (shift=true) — matches the existing
+      // `onLineClick` API used by SourceView. Filter to Explicit changes so
+      // programmatic moves (setModelLanguage, content flush) don't trigger.
+      editor.onDidChangeCursorSelection((e) => {
+        if (e.reason !== monaco.editor.CursorChangeReason.Explicit) return;
+        const sel = e.selection;
+        const startLine = Math.min(sel.startLineNumber, sel.endLineNumber);
+        const endLine = Math.max(sel.startLineNumber, sel.endLineNumber);
+        onLineClickRef.current?.(startLine, { shift: false });
+        if (endLine !== startLine) {
+          onLineClickRef.current?.(endLine, { shift: true });
         }
       });
     },
